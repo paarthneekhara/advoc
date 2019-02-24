@@ -83,7 +83,6 @@ def waveform_to_melspec(
   if nch != 1:
     raise NotImplementedError('Can only extract features from monaural signals')
 
-  # TODO: figure out centering
   X = stft(x, nfft, nhop)[:, :, 0]
   X_mag = np.abs(X)
 
