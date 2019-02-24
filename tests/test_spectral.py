@@ -3,6 +3,7 @@ import pickle
 import unittest
 
 import numpy as np
+from scipy.signal import hilbert as sphilbert
 
 import advoc.audioio as audioio
 import advoc.spectral as spectral
@@ -55,6 +56,8 @@ class TestSpectralModule(unittest.TestCase):
 
 
   def test_r9y9(self):
+    self.assertEqual(self.wav_mono_22.shape, (82432, 1, 1), 'invalid shape')
+
     melspec = spectral.waveform_to_r9y9_melspec(self.wav_mono_22)
     self.assertEqual(melspec.dtype, np.float64)
     self.assertEqual(melspec.shape, (322, 80, 1), 'invalid shape')
@@ -69,6 +72,19 @@ class TestSpectralModule(unittest.TestCase):
     r9y9_melspec = np.swapaxes(r9y9_melspec, 0, 1)[3:, :, np.newaxis]
 
     self.assertTrue(np.array_equal(melspec, r9y9_melspec), 'not equal r9y9')
+
+
+  def test_inverse_r9y9(self):
+    self.assertEqual(self.wav_mono_22.shape, (82432, 1, 1), 'invalid shape')
+
+    melspec = spectral.waveform_to_r9y9_melspec(self.wav_mono_22)
+    inv_melspec = spectral.r9y9_melspec_to_waveform(melspec, waveform_len=82432)
+    self.assertEqual(inv_melspec.shape, self.wav_mono_22.shape, 'invalid shape')
+
+    x_env = np.abs(sphilbert(self.wav_mono_22[:, 0, 0]))
+    x_inv_env = np.abs(sphilbert(inv_melspec[:, 0, 0]))
+    env_l1 = np.mean(np.abs(x_env - x_inv_env))
+    self.assertAlmostEqual(env_l1, 0.01737, 4, 'bad envelope after inverse')
 
 
 if __name__ == '__main__':
