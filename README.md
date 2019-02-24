@@ -12,7 +12,7 @@ pip install -e .
 ```
 
 If you want to support more types of audio decoding (including MP3s), use the following command which will install `librosa`:
-`pip install -e .[audio_decoding]
+`pip install -e .[audio_decoding]`
 
 ## Testing
 
