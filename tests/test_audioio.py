@@ -14,7 +14,7 @@ MP3_MONO = os.path.join(AUDIO_DIR, 'mono.mp3')
 MP3_STEREO = os.path.join(AUDIO_DIR, 'stereo.mp3')
 
 
-class TestSpectralMethods(unittest.TestCase):
+class TestAudioIOModule(unittest.TestCase):
 
   def test_scipy_decode_audio(self):
     fs, x = decode_audio(WAV_MONO, fastwav=True)
