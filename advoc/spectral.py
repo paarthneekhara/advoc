@@ -5,14 +5,14 @@ import lws
 import numpy as np
 
 
-def stft(x, nfft, nhop, pad='center'):
+def stft(x, nfft, nhop, pad_end=True):
   """Performs the short-time Fourier transform on a waveform.
 
   Args:
     x: nd-array dtype float32 of shape [?, 1, 1].
     nfft: FFT size.
     nhop: Window size.
-    pad: If None, do not pad, otherwise pad by (nfft // 2) on both sides.
+    pad_end: If true, pad incomplete frames at end of waveform.
 
   Returns:
     nd-array dtype complex128 of shape [?, (nfft // 2) + 1, 1] containing the features.
@@ -24,9 +24,16 @@ def stft(x, nfft, nhop, pad='center'):
     raise NotImplementedError('Can only take STFT of monaural signals')
 
   x = x[:, 0, 0]
-  if pad == 'center':
-    pad_amt = nfft // 2
-    x = np.pad(x, [[pad_amt, pad_amt]], 'constant')
+  xlen = x.shape[0]
+
+  if pad_end == True:
+    num_frames = int(np.ceil(float(xlen) / nhop) + 1e-6)
+    if num_frames > 0:
+      last_frame_start = (num_frames - 1) * nhop
+      last_frame_end = last_frame_start + nfft
+      pad_amt = last_frame_end - xlen
+      if pad_amt > 0:
+        x = np.pad(x, [[0, pad_amt]], 'constant')
 
   return lws.lws(nfft, nhop, perfectrec=False).stft(x)[:, :, np.newaxis]
 
