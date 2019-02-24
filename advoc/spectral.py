@@ -99,7 +99,8 @@ def waveform_to_tacotron2_feats(x):
       x,
       fs=24000,
       nfft=1200,
-      nhop=300)
+      nhop=300,
+      norm_min_level_db=-40)
 
 
 def waveform_to_r9y9_feats(x):

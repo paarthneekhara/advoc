@@ -38,9 +38,9 @@ class TestSpectralModule(unittest.TestCase):
     self.assertEqual(melspec.dtype, np.float64)
     self.assertEqual(melspec.shape, (303, 80, 1), 'invalid shape')
 
-    self.assertAlmostEqual(np.sum(melspec), 5122.213, 3, 'invalid spec')
-    self.assertAlmostEqual(np.sum(melspec[200]), 31.119, 3, 'invalid spec')
-    self.assertAlmostEqual(np.sum(melspec[40]), 5.132, 3, 'invalid spec')
+    self.assertAlmostEqual(np.sum(melspec), 131.469, 3, 'invalid spec')
+    self.assertAlmostEqual(np.sum(melspec[200]), 0.973, 3, 'invalid spec')
+    self.assertAlmostEqual(np.sum(melspec[40]), 0., 3, 'invalid spec')
 
 
   def test_r9y9(self):
