@@ -45,7 +45,7 @@ class TestSpectralModule(unittest.TestCase):
 
 
   def test_tacotron2(self):
-    melspec = spectral.waveform_to_tacotron2_feats(self.wav_mono_24)
+    melspec = spectral.waveform_to_tacotron2_melspec(self.wav_mono_24)
     self.assertEqual(melspec.dtype, np.float64)
     self.assertEqual(melspec.shape, (300, 80, 1), 'invalid shape')
 
@@ -55,7 +55,7 @@ class TestSpectralModule(unittest.TestCase):
 
 
   def test_r9y9(self):
-    melspec = spectral.waveform_to_r9y9_feats(self.wav_mono_22)
+    melspec = spectral.waveform_to_r9y9_melspec(self.wav_mono_22)
     self.assertEqual(melspec.dtype, np.float64)
     self.assertEqual(melspec.shape, (322, 80, 1), 'invalid shape')
 

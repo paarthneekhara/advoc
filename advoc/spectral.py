@@ -101,7 +101,7 @@ def waveform_to_melspec(
   return X_mel_dbnorm[:, :, np.newaxis]
 
 
-def waveform_to_tacotron2_feats(x):
+def waveform_to_tacotron2_melspec(x):
   """Transforms waveform into mel spectrogram feature representation.
 
   Transforms waveform into feature representation for as described in original Tacotron 2 paper. No open source implementation so cannot gaurantee correctness. Reference:
@@ -121,7 +121,7 @@ def waveform_to_tacotron2_feats(x):
       norm_min_level_db=-40)
 
 
-def waveform_to_r9y9_feats(x):
+def waveform_to_r9y9_melspec(x, fs=22050):
   """Transforms waveform into unofficial mel spectrogram feature representation.
 
   Transforms waveform into feature representation for unofficial reimplementation of WaveNet vocoder. Unit tests guaranteeing parity with implementation. References:
@@ -137,6 +137,6 @@ def waveform_to_r9y9_feats(x):
   """
   return waveform_to_melspec(
       x,
-      fs=22050,
+      fs=fs,
       nfft=1024,
       nhop=256)
