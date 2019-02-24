@@ -2,11 +2,12 @@ import numpy as np
 import tensorflow as tf
 
 from advoc.loader import decode_extract_and_batch
-from util import feats_to_uint8_img
+from util import feats_to_uint8_img, feats_to_approx_audio
 
 
 TRAIN_BATCH_SIZE = 64
 Z_DIM = 100
+FS = 16000
 
 def train(fps, args):
   # Load data
@@ -15,7 +16,7 @@ def train(fps, args):
         fps=fps,
         batch_size=TRAIN_BATCH_SIZE,
         subseq_len=64,
-        audio_fs=16000,
+        audio_fs=FS,
         audio_mono=True,
         audio_normalize=True,
         decode_fastwav=True,
@@ -32,9 +33,12 @@ def train(fps, args):
         gpu_num=0)
 
   # Data summaries
-  tf.summary.audio('x_audio', x_audio[:, :, 0], 16000)
+  tf.summary.audio('x_audio', x_audio[:, :, 0], FS)
   tf.summary.image('x', feats_to_uint8_img(x))
+  tf.summary.audio('x_inv_audio',
+      feats_to_approx_audio(x, FS, 16384, n=3)[:, :, 0], FS)
 
+  """
   # Make z vector
   z = tf.random.normal([TRAIN_BATCH_SIZE, Z_DIM], dtype=tf.float32)
 
@@ -45,7 +49,8 @@ def train(fps, args):
 
   # Summarize G_z
   # TODO: approximate invert to audio
-  tf.summary.image(G_z, feats_to_uint8_img(G_z))
+  tf.summary.image('G_z', G_z, feats_to_uint8_img(G_z))
+  tf.summary.audio('G_z_inv_audio', feats_to_approx_audio(G_z, FS, 16384, n=3)[:, :, 0], FS)
 
   # Make real discriminator
   with tf.name_scope('D_x'), tf.variable_scope('D'):
@@ -65,17 +70,23 @@ def train(fps, args):
   G_train_op = G_opt.minimize(G_loss, var_list=G_vars,
       global_step=tf.train.get_or_create_global_step())
   D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
+  """
+
+  step = tf.train.get_or_create_global_step()
 
   # Train
   with tf.train.MonitoredTrainingSession(
       checkpoint_dir=args.train_dir,
-      save_checkpoint_secs=60,
-      save_summaries_secs=5) as sess:
+      save_checkpoint_secs=args.train_ckpt_every_nsecs,
+      save_summaries_secs=args.train_summary_every_nsecs) as sess:
     while not sess.should_stop():
+      sess.run(x_audio)
+      """
       for i in range(NUM_DISC_UPDATES):
         sess.run(D_train_op)
 
       sess.run(G_train_op)
+      """
 
 
 if __name__ == '__main__':

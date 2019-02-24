@@ -43,6 +43,12 @@ def create_mel_filterbank(*args, **kwargs):
   return librosa.filters.mel(*args, **kwargs)
 
 
+@lru_cache(maxsize=4)
+def create_inverse_mel_filterbank(*args, **kwargs):
+  W = create_mel_filterbank(*args, **kwargs)
+  return np.linalg.pinv(W)
+
+
 # NOTE: nfft and hop are configured for fs=20480
 def waveform_to_melspec(
     x,
@@ -75,8 +81,11 @@ def waveform_to_melspec(
     norm_ref_level_db: Maximum dB level (clips between this and 0).
 
   Returns:
-    nd-array dtype float32 of shape [?, nmels, 1] containing the features.
+    nd-array dtype float64 of shape [?, nmels, 1] containing the features.
   """
+  if x.dtype != np.float32:
+    raise ValueError()
+
   nsamps, nfeats, nch = x.shape
   if nfeats != 1:
     raise ValueError()
@@ -86,7 +95,7 @@ def waveform_to_melspec(
   X = stft(x, nfft, nhop)[:, :, 0]
   X_mag = np.abs(X)
 
-  mel_filterbank = librosa.filters.mel(
+  mel_filterbank = create_mel_filterbank(
       fs, nfft, fmin=mel_min, fmax=mel_max, n_mels=mel_num_bins)
   X_mel = np.swapaxes(np.dot(mel_filterbank, X_mag.T), 0, 1)
 
@@ -110,7 +119,7 @@ def waveform_to_tacotron2_melspec(x):
     x: nd-array dtype float32 of shape [?, 1, 1] at 24000Hz.
 
   Returns:
-    nd-array dtype float32 of shape [?, 80, 1] at 80Hz.
+    nd-array dtype float64 of shape [?, 80, 1] at 80Hz.
   """
   return waveform_to_melspec(
       x,
@@ -129,13 +138,67 @@ def waveform_to_r9y9_melspec(x, fs=22050):
     - https://github.com/r9y9/wavenet_vocoder/blob/master/hparams.py
 
   Args:
-    x: nd-array dtype float32 of shape [?, 1, 1] at 22050Hz.
+    x: nd-array dtype float32 of shape [?, 1, 1].
+    fs: Sample rate (should be 22050 to be the same as r9y9).
 
   Returns:
-    nd-array dtype float32 of shape [?, 80, 1] at 86.13Hz.
+    nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
   """
   return waveform_to_melspec(
       x,
       fs=fs,
       nfft=1024,
       nhop=256)
+
+
+def r9y9_melspec_to_waveform(X_mel_dbnorm, fs=22050, waveform_len=None):
+  """Approximately inverts unofficial mel spectrogram to waveform.
+
+  Args:
+    X_mel_dbnorm: nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
+    fs: Output sample rate (should be 22050 to be the same as r9y9).
+    waveform_len: If specified, pad or trim output waveform to be this long.
+
+  Returns:
+    nd-array dtype float32 of shape [?, 1, 1].
+  """
+  if X_mel_dbnorm.dtype != np.float64:
+    raise ValueError()
+
+  nsamps, nfeats, nch = X_mel_dbnorm.shape
+  if nfeats != 80:
+    raise ValueError()
+  if nch != 1:
+    raise NotImplementedError('Can only invert monaural signals')
+  X_mel_dbnorm = X_mel_dbnorm[:, :, 0]
+
+  norm_min_level_db = -100
+  norm_ref_level_db = 20
+  nfft = 1024
+  nhop = 256
+  mel_min = 125
+  mel_max = 7600
+  mel_num_bins = 80
+  
+  X_mel_db = (X_mel_dbnorm * -norm_min_level_db) + norm_min_level_db
+  X_mel = np.power(10, (X_mel_db + norm_ref_level_db) / 20)
+
+  inv_mel_filterbank = create_inverse_mel_filterbank(
+      fs, nfft, fmin=mel_min, fmax=mel_max, n_mels=mel_num_bins)
+  X_mag = np.dot(X_mel, inv_mel_filterbank.T)
+  X_mag = np.maximum(0., X_mag)
+
+  # TODO: Add argument for Griffin-Lim instead of LWS.
+  lws_processor = lws.lws(nfft, nhop, mode='speech', perfectrec=False)
+  X_lws = lws_processor.run_lws(X_mag)
+  x_lws = lws_processor.istft(X_lws)
+
+  if waveform_len is not None:
+    x_lws_len = x_lws.shape[0]
+    if x_lws_len < waveform_len:
+      x_lws = np.pad(x_lws, [[0, waveform_len - x_lws_len]], 'constant')
+      pass
+    elif x_lws_len > waveform_len:
+      x_lws = x_lws[:waveform_len]
+
+  return x_lws[:, np.newaxis, np.newaxis].astype(np.float32)

@@ -67,7 +67,7 @@ def decode_audio(fp, fs=None, mono=False, normalize=False, fastwav=False):
 
 
 def save_as_wav(fp, fs, x):
-  """Saves 32-bit floating point waveform as signed 16-bit PCM WAV file.
+  """Saves floating point waveform as signed 16-bit PCM WAV file.
 
   Args:
     fp: Output file path.
