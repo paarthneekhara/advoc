@@ -94,9 +94,6 @@ def waveform_to_melspec(
 
   X = stft(x, nfft, nhop)[:, :, 0]
   X_mag = np.abs(X)
-  import pickle
-  with open('forward.pkl', 'wb') as f:
-    pickle.dump(X_mag, f)
 
   mel_filterbank = create_mel_filterbank(
       fs, nfft, fmin=mel_min, fmax=mel_max, n_mels=mel_num_bins)
