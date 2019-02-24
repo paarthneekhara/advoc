@@ -4,12 +4,16 @@ import tensorflow as tf
 from advoc.loader import decode_extract_and_batch
 from util import feats_to_uint8_img
 
+
+TRAIN_BATCH_SIZE = 64
+Z_DIM = 100
+
 def train(fps, args):
   # Load data
   with tf.name_scope('loader'):
-    x_feats, x_audio = decode_extract_and_batch(
+    x, x_audio = decode_extract_and_batch(
         fps=fps,
-        batch_size=64,
+        batch_size=TRAIN_BATCH_SIZE,
         subseq_len=64,
         audio_fs=16000,
         audio_mono=True,
@@ -24,14 +28,43 @@ def train(fps, args):
         subseq_randomize_offset=False,
         subseq_overlap_ratio=0,
         subseq_pad_end=True,
-        prefetch_size=64 * 4,
+        prefetch_size=TRAIN_BATCH_SIZE * 4,
         gpu_num=0)
 
   # Data summaries
-  tf.summary.audio('x', x_audio[:, :, 0], 16000)
-  tf.summary.image('x', feats_to_uint8_img(x_feats))
+  tf.summary.audio('x_audio', x_audio[:, :, 0], 16000)
+  tf.summary.image('x', feats_to_uint8_img(x))
 
-  tf.train.get_or_create_global_step()
+  # Make z vector
+  z = tf.random.normal([TRAIN_BATCH_SIZE, Z_DIM], dtype=tf.float32)
+
+  # Make generator
+  with tf.variable_scope('G'):
+    G_z = MelspecGANGenerator(z, train=True)
+  G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='G')
+
+  # Summarize G_z
+  # TODO: approximate invert to audio
+  tf.summary.image(G_z, feats_to_uint8_img(G_z))
+
+  # Make real discriminator
+  with tf.name_scope('D_x'), tf.variable_scope('D'):
+    D_x = MelspecGANDiscriminator(x, train=True)
+
+  # Make fake discriminator
+  with tf.name_scope('D_G_z'), tf.variable_scope('D', reuse=True):
+    D_G_z = MelspecGANDiscriminator(G_z, train=True)
+
+  # Create loss
+  tf.summary.scalar('G_loss', G_loss)
+  tf.summary.scalar('D_loss', D_loss)
+
+  # Create opt
+
+  # Create training ops
+  G_train_op = G_opt.minimize(G_loss, var_list=G_vars,
+      global_step=tf.train.get_or_create_global_step())
+  D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
 
   # Train
   with tf.train.MonitoredTrainingSession(
@@ -39,7 +72,10 @@ def train(fps, args):
       save_checkpoint_secs=60,
       save_summaries_secs=5) as sess:
     while not sess.should_stop():
-      sess.run(x_audio)
+      for i in range(NUM_DISC_UPDATES):
+        sess.run(D_train_op)
+
+      sess.run(G_train_op)
 
 
 if __name__ == '__main__':
