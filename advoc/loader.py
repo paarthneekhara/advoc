@@ -1,8 +1,8 @@
 import numpy as np
 import tensorflow as tf
 
-from audioio import decode_audio
-from spectral import waveform_to_r9y9_melspec
+from .audioio import decode_audio
+from .spectral import waveform_to_r9y9_melspec
 
 
 def decode_extract_and_batch(
