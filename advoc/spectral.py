@@ -22,7 +22,7 @@ def stft(x, nfft, nhop):
 
 @lru_cache(maxsize=4)
 def create_mel_filterbank(*args, **kwargs):
-  return librosa.filters.mel(*args, **kwargs).T
+  return librosa.filters.mel(*args, **kwargs)
 
 
 # NOTE: nfft and hop are configured for fs=20480
@@ -31,8 +31,8 @@ def waveform_to_melspec(
     fs,
     nfft,
     nhop,
-    mel_min=125.,
-    mel_max=7600.,
+    mel_min=125,
+    mel_max=7600,
     mel_num_bins=80,
     norm_allow_clipping=True,
     norm_min_level_db=-100,
@@ -66,21 +66,21 @@ def waveform_to_melspec(
     raise NotImplementedError('Can only extract features from monaural signals')
 
   # TODO: figure out centering
-  X = lws.lws(nfft, nhop, mode='speech').stft(x[:, 0, 0])
+  X = stft(x, nfft, nhop)[:, :, 0]
   X_mag = np.abs(X)
 
-  mel_filterbank = create_mel_filterbank(
+  mel_filterbank = librosa.filters.mel(
       fs, nfft, fmin=mel_min, fmax=mel_max, n_mels=mel_num_bins)
-  X_mel = np.dot(X_mag, mel_filterbank)
+  X_mel = np.swapaxes(np.dot(mel_filterbank, X_mag.T), 0, 1)
 
-  min_level = np.exp(norm_min_level_db / 20. * np.log(10))
-  X_mel_db = 20. * np.log10(np.maximum(min_level, X_mel)) - norm_ref_level_db
+  min_level = np.exp(norm_min_level_db / 20 * np.log(10))
+  X_mel_db = 20 * np.log10(np.maximum(min_level, X_mel)) - norm_ref_level_db
 
   if not norm_allow_clipping:
     assert X_mel_db.max() <= 0 and X_mel_db.min() - norm_min_level_db >= 0
   X_mel_dbnorm = np.clip((X_mel_db - norm_min_level_db) / -norm_min_level_db, 0, 1)
 
-  return X_mel_dbnorm[:, :, np.newaxis].astype(np.float32)
+  return X_mel_dbnorm[:, :, np.newaxis]
 
 
 def waveform_to_tacotron2_feats(x):

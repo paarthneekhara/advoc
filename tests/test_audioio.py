@@ -18,6 +18,7 @@ class TestAudioIOModule(unittest.TestCase):
 
   def test_scipy_decode_audio(self):
     fs, x = decode_audio(WAV_MONO, fastwav=True)
+    self.assertEqual(x.dtype, np.float32)
     self.assertEqual(fs, 44100, 'incorrect sample rate')
     self.assertEqual(x.shape, (164864, 1, 1), 'incorrect shape')
     self.assertAlmostEqual(x.min(), -0.47483748, 8, 'incorrect min value')
@@ -41,6 +42,7 @@ class TestAudioIOModule(unittest.TestCase):
 
   def test_librosa_decode_audio(self):
     fs, x = decode_audio(WAV_MONO)
+    self.assertEqual(x.dtype, np.float32)
     self.assertEqual(fs, 44100, 'incorrect sample rate')
     self.assertEqual(x.shape, (164864, 1, 1), 'incorrect shape')
     self.assertAlmostEqual(x.min(), -0.474823, 6, 'incorrect min value')
