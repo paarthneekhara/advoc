@@ -24,6 +24,10 @@ class TestSpectralModule(unittest.TestCase):
   def test_stft(self):
     X = spectral.stft(self.wav_mono_44, 1024, 256)
     self.assertEqual(X.dtype, np.complex128)
+    self.assertEqual(X.shape, (641, 513, 1), 'invalid shape')
+
+    X = spectral.stft(self.wav_mono_44, 1024, 256, perfect_rec=True)
+    self.assertEqual(X.dtype, np.complex128)
     self.assertEqual(X.shape, (647, 513, 1), 'invalid shape')
 
     X_mag = np.abs(X)
@@ -36,10 +40,10 @@ class TestSpectralModule(unittest.TestCase):
   def test_tacotron2(self):
     melspec = spectral.waveform_to_tacotron2_feats(self.wav_mono_24)
     self.assertEqual(melspec.dtype, np.float64)
-    self.assertEqual(melspec.shape, (303, 80, 1), 'invalid shape')
+    self.assertEqual(melspec.shape, (297, 80, 1), 'invalid shape')
 
     self.assertAlmostEqual(np.sum(melspec), 131.469, 3, 'invalid spec')
-    self.assertAlmostEqual(np.sum(melspec[200]), 0.973, 3, 'invalid spec')
+    self.assertAlmostEqual(np.sum(melspec[200]), 0.644, 3, 'invalid spec')
     self.assertAlmostEqual(np.sum(melspec[40]), 0., 3, 'invalid spec')
 
 
@@ -48,11 +52,12 @@ class TestSpectralModule(unittest.TestCase):
       wav_ref = pickle.load(f)
     melspec = spectral.waveform_to_r9y9_feats(self.wav_mono_22)
     self.assertEqual(melspec.dtype, np.float64)
-    self.assertEqual(melspec.shape, (325, 80, 1), 'invalid shape')
+    self.assertEqual(melspec.shape, (319, 80, 1), 'invalid shape')
 
     with open(WAV_MONO_R9Y9, 'rb') as f:
       r9y9_melspec = pickle.load(f)
-    r9y9_melspec = np.swapaxes(r9y9_melspec, 0, 1)[:, :, np.newaxis]
+    # R9Y9 code pads by ((nfft-nhop) // nhop) == 3 frames on both sides.
+    r9y9_melspec = np.swapaxes(r9y9_melspec, 0, 1)[3:-3, :, np.newaxis]
     self.assertTrue(np.array_equal(melspec, r9y9_melspec), 'not equal r9y9')
 
 

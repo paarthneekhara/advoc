@@ -5,19 +5,27 @@ import lws
 import numpy as np
 
 
-def stft(x, nfft, nhop):
+def stft(x, nfft, nhop, perfect_rec=False):
   """Performs the short-time Fourier transform on a waveform.
 
   Args:
     x: nd-array dtype float32 of shape [?, 1, 1].
     nfft: FFT size.
     nhop: Window size.
+    perfect_rec: If True, pads x by (nfft - nhop) on both sides.
 
   Returns:
     nd-array dtype complex128 of shape [?, (nfft // 2) + 1, 1] containing the features.
   """
+  nsamps, nfeats, nch = x.shape
+  if nfeats != 1:
+    raise ValueError()
+  if nch != 1:
+    raise NotImplementedError('Can only take STFT of monaural signals')
 
-  return lws.lws(nfft, nhop).stft(x[:, 0, 0])[:, :, np.newaxis]
+  x = x[:, 0, 0]
+
+  return lws.lws(nfft, nhop, perfectrec=perfect_rec).stft(x)[:, :, np.newaxis]
 
 
 @lru_cache(maxsize=4)
