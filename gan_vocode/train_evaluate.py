@@ -39,7 +39,7 @@ def train(fps, args):
   # Create model
   model(x_wav, x_spec)
 
-  Train
+  # Train
   with tf.train.MonitoredTrainingSession(
       checkpoint_dir=args.train_dir,
       save_checkpoint_secs=args.train_ckpt_every_nsecs,
