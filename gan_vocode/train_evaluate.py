@@ -29,7 +29,7 @@ def train(fps, args):
       extract_parallel_calls=8,
       repeat=True,
       shuffle=True,
-      shuffle_buffer_size=4096,
+      shuffle_buffer_size=512,
       subseq_randomize_offset=args.data_randomize_offset,
       subseq_overlap_ratio=args.data_overlap_ratio,
       subseq_pad_end=True,
