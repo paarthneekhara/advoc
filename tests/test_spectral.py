@@ -31,7 +31,9 @@ class TestSpectralModule(unittest.TestCase):
 
     melspec = spectral.waveform_to_r9y9_feats(self.wav_mono_22)
 
+    self.assertEqual(melspec.shape, (325, 80, 1))
     self.assertTrue(np.array_equal(melspec, r9y9_melspec), 'not equal r9y9')
+
 
 if __name__ == '__main__':
   unittest.main()

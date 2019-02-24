@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 import librosa
 import lws
 import numpy as np
@@ -17,6 +19,10 @@ def stft(x, nfft, nhop):
 
   return lws.lws(nfft, nhop, mode='speech').stft(x[:, 0, 0])[:, :, np.newaxis]
 
+
+@lru_cache(maxsize=4)
+def create_mel_filterbank(*args, **kwargs):
+  return librosa.filters.mel(*args, **kwargs).T
 
 
 # NOTE: nfft and hop are configured for fs=20480
@@ -59,14 +65,13 @@ def waveform_to_melspec(
   if nch != 1:
     raise NotImplementedError('Can only extract features from monaural signals')
 
+  # TODO: figure out centering
   X = lws.lws(nfft, nhop, mode='speech').stft(x[:, 0, 0])
   X_mag = np.abs(X)
 
-  # TODO: figure out centering
-  # TODO: only calculate triangular filters once
-  mel_triangular_filters = librosa.filters.mel(
+  mel_filterbank = create_mel_filterbank(
       fs, nfft, fmin=mel_min, fmax=mel_max, n_mels=mel_num_bins)
-  X_mel = np.dot(X_mag, mel_triangular_filters.T)
+  X_mel = np.dot(X_mag, mel_filterbank)
 
   min_level = np.exp(norm_min_level_db / 20. * np.log(10))
   X_mel_db = 20. * np.log10(np.maximum(min_level, X_mel)) - norm_ref_level_db
