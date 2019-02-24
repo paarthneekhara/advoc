@@ -17,7 +17,7 @@ def stft(x, nfft, nhop):
     nd-array dtype complex128 of shape [?, (nfft // 2) + 1, 1] containing the features.
   """
 
-  return lws.lws(nfft, nhop, mode='speech').stft(x[:, 0, 0])[:, :, np.newaxis]
+  return lws.lws(nfft, nhop).stft(x[:, 0, 0])[:, :, np.newaxis]
 
 
 @lru_cache(maxsize=4)
