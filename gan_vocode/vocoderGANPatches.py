@@ -13,12 +13,13 @@ class VocoderGAN(Model):
   wgangp_lambda = 10
   wgangp_nupdates = 5
   gen_nonlin = 'relu'
+  gan_strategy = 'wgangp'
   recon_loss_type = 'wav' # wav, spec
   recon_objective = 'l1' # l1, l2
   recon_regularizer = 1. 
   train_batch_size = 64
 
-  def build_generator(self, x_spec, z):
+  def build_generator(self, x_spec, z_tiled):
     x_spec = tf.transpose(x_spec, [0, 1, 3, 2])
     conv1d_transpose = lambda x, n: tf.layers.conv2d_transpose(
         x,
@@ -42,18 +43,9 @@ class VocoderGAN(Model):
     else:
       raise ValueError()
 
-    # FC and reshape for convolution
-    # [100] -> [64, 64]
-    x = z
-    batch_size = tf.shape(z)[0]
-    with tf.variable_scope('z_project'):
-      x = tf.layers.dense(x, 8 * 8 * self.dim)
-      x = tf.reshape(x, [batch_size, 64, 1, self.dim])
+    x = tf.concat([x_spec, z_tiled], axis=3)
 
-    x = tf.nn.tanh(x)
-    x = tf.concat([x, x_spec], axis=3)
-
-    # [64, 128] -> [64, 512]
+    # [64, 80 + z_dim] -> [64, 512]
     with tf.variable_scope('upconv_1x1'):
       x = conv1x1d_transpose(x, self.dim * 8)
     x = nonlin(x)
@@ -90,6 +82,13 @@ class VocoderGAN(Model):
         n,
         (self.kernel_len, 1),
         strides=(self.stride, 1),
+        padding='same')
+
+    conv1x1d = lambda x, n: tf.layers.conv2d(
+        x,
+        n,
+        (1, 1),
+        strides=(1, 1),
         padding='same')
 
     def lrelu(inputs, alpha=0.2):
@@ -145,20 +144,18 @@ class VocoderGAN(Model):
     output = lrelu(output)
     output = phaseshuffle(output)
 
-    # Layer 4
     # [64, 512] -> [16, 1024]
     with tf.variable_scope('downconv_4'):
       output = conv1d(output, self.dim * 16)
     output = lrelu(output)
 
-    # Flatten
-    output = tf.reshape(output, [batch_size, 4 * 4 * self.dim * 16])
+    output = conv1x1d(output, 1)
 
-    # Connect to single logit
-    with tf.variable_scope('output'):
-      output = tf.layers.dense(output, 1)[:, 0]
-      
-    return output 
+    # flatten out the logits for each chunk of each 
+    # audio in the batch into a 1-d vector
+    output = tf.reshape(output, [batch_size * 16])
+    
+    return output
 
   def __call__(self, x_wav, x_spec):
     try:
@@ -167,11 +164,12 @@ class VocoderGAN(Model):
       batch_size = tf.shape(x_wav)[0]
 
     # Noise var
-    z = tf.random_uniform([batch_size, self.zdim], -1, 1, dtype=tf.float32)
+    z = tf.random.normal([batch_size, 1, 1, self.zdim], dtype=tf.float32)
+    z_tiled = z * tf.constant(1.0, shape=[batch_size, 64, 1, self.zdim])
 
     # Generator
     with tf.variable_scope('G'):
-      G_z = self.build_generator(x_spec, z)
+      G_z = self.build_generator(x_spec, z_tiled)
     G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='G')
 
     # Discriminators
@@ -184,10 +182,10 @@ class VocoderGAN(Model):
     self.wav_l1 = wav_l1 = tf.reduce_mean(tf.abs(x_wav - G_z))
     self.wav_l2 = wav_l2 = tf.reduce_mean(tf.square(x_wav - G_z))
 
-    gen_spec = tf.contrib.signal.stft(G_z[:,:,0,0], 128, 256, pad_end=True)
+    gen_spec = tf.contrib.signal.stft(G_z[:,:,0,0], 1024, 256, pad_end=True)
     gen_spec_mag = tf.abs(gen_spec)
 
-    target_spec = tf.contrib.signal.stft(x_wav[:,:,0,0], 128, 256, pad_end=True)
+    target_spec = tf.contrib.signal.stft(x_wav[:,:,0,0], 1024, 256, pad_end=True)
     target_spec_mag = tf.abs(target_spec)
 
     self.spec_l1 = spec_l1 = tf.reduce_mean(tf.abs(target_spec_mag - gen_spec_mag))
@@ -206,31 +204,76 @@ class VocoderGAN(Model):
         self.recon_loss = spec_l2
 
     # WGAN-GP loss
-    G_loss = -tf.reduce_mean(D_G_z)
-    D_loss = tf.reduce_mean(D_G_z) - tf.reduce_mean(D_x)
 
-    alpha = tf.random_uniform(shape=[batch_size, 1, 1, 1], minval=0., maxval=1.)
-    differences = G_z - x_wav
-    interpolates = x_wav + (alpha * differences)
-    with tf.name_scope('D_interp'), tf.variable_scope('D', reuse=True):
-      D_interp = self.build_discriminator(interpolates)
+    if self.gan_strategy == 'dcgan':
+      fake = tf.zeros([D_x.shape[0]], dtype=tf.float32)
+      real = tf.ones([D_x.shape[0]], dtype=tf.float32)
 
-    gradients = tf.gradients(D_interp, [interpolates])[0]
-    slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2]))
-    gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
-    D_loss += self.wgangp_lambda * gradient_penalty
+      G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        logits=D_G_z,
+        labels=real
+      ))
 
+      D_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        logits=D_G_z,
+        labels=fake
+      ))
+      D_loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        logits=D_x,
+        labels=real
+      ))
+
+      D_loss /= 2.
+
+    elif self.gan_strategy == 'wgangp':
+      G_loss = -tf.reduce_mean(D_G_z)
+      D_loss = tf.reduce_mean(D_G_z) - tf.reduce_mean(D_x)
+
+      alpha = tf.random_uniform(shape=[batch_size, 1, 1, 1], minval=0., maxval=1.)
+      differences = G_z - x_wav
+      interpolates = x_wav + (alpha * differences)
+      with tf.name_scope('D_interp'), tf.variable_scope('D', reuse=True):
+        D_interp = self.build_discriminator(interpolates)
+
+      gradients = tf.gradients(D_interp, [interpolates])[0]
+      slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2]))
+      gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
+      D_loss += self.wgangp_lambda * gradient_penalty
+
+    elif self.gan_strategy == 'lsgan':
+      G_loss = tf.reduce_mean((D_G_z - 1.) ** 2)
+      D_loss = tf.reduce_mean((D_x - 1.) ** 2)
+      D_loss += tf.reduce_mean(D_G_z ** 2)
+      D_loss /= 2.
+    else:
+      raise NotImplementedError()
+    
+    # adding the reconstruction LOSS
     G_loss += self.recon_regularizer * self.recon_loss
-    # Optimizers
-    G_opt = tf.train.AdamOptimizer(
-        learning_rate=1e-4,
-        beta1=0.5,
-        beta2=0.9)
+    
 
-    D_opt = tf.train.AdamOptimizer(
-        learning_rate=1e-4,
-        beta1=0.5,
-        beta2=0.9)
+    # Optimizers
+    if self.gan_strategy == 'dcgan':
+      G_opt = tf.train.AdamOptimizer(
+          learning_rate=2e-4,
+          beta1=0.5)
+      D_opt = tf.train.AdamOptimizer(
+          learning_rate=2e-4,
+          beta1=0.5)
+    elif self.gan_strategy == 'lsgan':
+      G_opt = tf.train.RMSPropOptimizer(
+          learning_rate=1e-4)
+      D_opt = tf.train.RMSPropOptimizer(
+          learning_rate=1e-4)
+    elif self.gan_strategy == 'wgangp':
+      G_opt = tf.train.AdamOptimizer(
+          learning_rate=1e-4,
+          beta1=0.5,
+          beta2=0.9)
+      D_opt = tf.train.AdamOptimizer(
+          learning_rate=1e-4,
+          beta1=0.5,
+          beta2=0.9)
 
     # Training ops
     self.G_train_op = G_opt.minimize(G_loss, var_list=G_vars,

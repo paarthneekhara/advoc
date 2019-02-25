@@ -4,7 +4,7 @@ from advoc.loader import decode_extract_and_batch
 from model import Modes
 from util import override_model_attrs
 
-from vocoderGAN import VocoderGAN
+from vocoderGANPatches import VocoderGAN
 
 def train(fps, args):
   # Initialize model
