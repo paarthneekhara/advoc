@@ -4,6 +4,14 @@ import tensorflow as tf
 import advoc.spectral as spectral
 
 
+def feats_norm(x):
+  return (x * 2.) - 1.
+
+
+def feats_denorm(x):
+  return (x + 1.) * 0.5
+
+
 def feats_to_uint8_img(x):
   x = tf.image.rot90(x)
   x *= 255.

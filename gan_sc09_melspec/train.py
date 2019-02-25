@@ -3,14 +3,13 @@ import tensorflow as tf
 
 from advoc.loader import decode_extract_and_batch
 from conv2d import MelspecGANGenerator, MelspecGANDiscriminator
-from util import feats_to_uint8_img, feats_to_approx_audio
+from util import feats_to_uint8_img, feats_to_approx_audio, feats_norm, feats_denorm
 
 
 TRAIN_BATCH_SIZE = 64
-TRAIN_LOSS = 'wgangp'
+TRAIN_LOSS = 'dcgan'
 Z_DIM = 100
 FS = 16000
-NUM_DISC_UPDATES = 5
 
 def train(fps, args):
   # Load data
@@ -34,12 +33,13 @@ def train(fps, args):
         subseq_pad_end=True,
         prefetch_size=TRAIN_BATCH_SIZE * 8,
         gpu_num=0)
+    x = feats_norm(x)
 
   # Data summaries
   tf.summary.audio('x_audio', x_audio[:, :, 0], FS)
-  tf.summary.image('x', feats_to_uint8_img(x))
+  tf.summary.image('x', feats_to_uint8_img(feats_denorm(x)))
   tf.summary.audio('x_inv_audio',
-      feats_to_approx_audio(x, FS, 16384, n=3)[:, :, 0], FS)
+      feats_to_approx_audio(feats_denorm(x), FS, 16384, n=3)[:, :, 0], FS)
 
   # Make z vector
   z = tf.random.normal([TRAIN_BATCH_SIZE, Z_DIM], dtype=tf.float32)
@@ -51,9 +51,9 @@ def train(fps, args):
   G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='G')
 
   # Summarize G_z
-  # TODO: approximate invert to audio
-  tf.summary.image('G_z', feats_to_uint8_img(G_z))
-  tf.summary.audio('G_z_inv_audio', feats_to_approx_audio(G_z, FS, 16384, n=3)[:, :, 0], FS)
+  tf.summary.image('G_z', feats_to_uint8_img(feats_denorm(G_z)))
+  tf.summary.audio('G_z_inv_audio',
+      feats_to_approx_audio(feats_denorm(G_z), FS, 16384, n=3)[:, :, 0], FS)
 
   # Make real discriminator
   D = MelspecGANDiscriminator()
@@ -65,11 +65,31 @@ def train(fps, args):
     D_G_z = D(G_z, training=True)
 
   # Create loss
-  if TRAIN_LOSS == 'wgangp':
+  num_disc_updates_per_genr = 1
+  if TRAIN_LOSS == 'dcgan':
+    fake = tf.zeros([TRAIN_BATCH_SIZE], dtype=tf.float32)
+    real = tf.ones([TRAIN_BATCH_SIZE], dtype=tf.float32)
+
+    G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+      logits=D_G_z,
+      labels=real
+    ))
+
+    D_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+      logits=D_G_z,
+      labels=fake
+    ))
+    D_loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+      logits=D_x,
+      labels=real
+    ))
+
+    D_loss /= 2.
+  elif TRAIN_LOSS == 'wgangp':
     G_loss = -tf.reduce_mean(D_G_z)
     D_loss = tf.reduce_mean(D_G_z) - tf.reduce_mean(D_x)
 
-    alpha = tf.random_uniform(shape=[args.train_batch_size, 1, 1, 1], minval=0., maxval=1.)
+    alpha = tf.random_uniform(shape=[TRAIN_BATCH_SIZE, 1, 1, 1], minval=0., maxval=1.)
     differences = G_z - x
     interpolates = x + (alpha * differences)
     with tf.name_scope('D_interp'), tf.variable_scope('D', reuse=True):
@@ -80,6 +100,8 @@ def train(fps, args):
     slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2, 3]))
     gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
     D_loss += LAMBDA * gradient_penalty
+
+    num_disc_updates_per_genr = 5
   else:
     raise ValueError()
 
@@ -87,7 +109,14 @@ def train(fps, args):
   tf.summary.scalar('D_loss', D_loss)
 
   # Create opt
-  if TRAIN_LOSS == 'wgangp':
+  if TRAIN_LOSS == 'dcgan':
+    G_opt = tf.train.AdamOptimizer(
+        learning_rate=2e-4,
+        beta1=0.5)
+    D_opt = tf.train.AdamOptimizer(
+        learning_rate=2e-4,
+        beta1=0.5)
+  elif TRAIN_LOSS == 'wgangp':
     # TODO: some igul code uses beta1=0.
     G_opt = tf.train.AdamOptimizer(
         learning_rate=1e-4,
@@ -111,7 +140,7 @@ def train(fps, args):
       save_checkpoint_secs=args.train_ckpt_every_nsecs,
       save_summaries_secs=args.train_summary_every_nsecs) as sess:
     while not sess.should_stop():
-      for i in range(NUM_DISC_UPDATES):
+      for i in range(num_disc_updates_per_genr):
         sess.run(D_train_op)
 
       sess.run(G_train_op)
