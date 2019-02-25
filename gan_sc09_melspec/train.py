@@ -1,7 +1,12 @@
+import pickle
+import time
+
 import numpy as np
 import tensorflow as tf
 
+from advoc.audioio import save_as_wav
 from advoc.loader import decode_extract_and_batch
+from advoc.spectral import r9y9_melspec_to_waveform
 from conv2d import MelspecGANGenerator, MelspecGANDiscriminator
 from util import feats_to_uint8_img, feats_to_approx_audio, feats_norm, feats_denorm
 
@@ -147,6 +152,120 @@ def train(fps, args):
       sess.run(G_train_op)
 
 
+"""
+  Computes inception score every time a checkpoint is saved
+"""
+def incept(args):
+  incept_dir = os.path.join(args.train_dir, 'incept')
+  if not os.path.isdir(incept_dir):
+    os.makedirs(incept_dir)
+
+  # Create GAN graph
+  z = tf.placeholder(tf.float32, [None, Z_DIM])
+  with tf.variable_scope('G'):
+    G = MelspecGANGenerator()
+    G_z = G(z, training=False)
+  G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='G')
+  step = tf.train.get_or_create_global_step()
+  gan_saver = tf.train.Saver(var_list=G_vars + [step], max_to_keep=1)
+
+  # Load or generate latents
+  z_fp = os.path.join(incept_dir, 'z.pkl')
+  if os.path.exists(z_fp):
+    with open(z_fp, 'rb') as f:
+      _zs = pickle.load(f)
+  else:
+    zs = tf.random.normal([args.incept_n, Z_DIM], dtype=tf.float32)
+    with tf.Session() as sess:
+      _zs = sess.run(zs)
+    with open(z_fp, 'wb') as f:
+      pickle.dump(_zs, f)
+
+  # Load classifier graph
+  incept_graph = tf.Graph()
+  with incept_graph.as_default():
+    incept_saver = tf.train.import_meta_graph(args.incept_metagraph_fp)
+  incept_x = incept_graph.get_tensor_by_name('x:0')
+  incept_preds = incept_graph.get_tensor_by_name('scores:0')
+  incept_sess = tf.Session(graph=incept_graph)
+  incept_saver.restore(incept_sess, args.incept_ckpt_fp)
+
+  # Create summaries
+  summary_graph = tf.Graph()
+  with summary_graph.as_default():
+    incept_mean = tf.placeholder(tf.float32, [])
+    incept_std = tf.placeholder(tf.float32, [])
+    summaries = [
+        tf.summary.scalar('incept_mean', incept_mean),
+        tf.summary.scalar('incept_std', incept_std)
+    ]
+    summaries = tf.summary.merge(summaries)
+  summary_writer = tf.summary.FileWriter(incept_dir)
+
+  # Loop, waiting for checkpoints
+  ckpt_fp = None
+  _best_score = 0.
+  while True:
+    latest_ckpt_fp = tf.train.latest_checkpoint(args.train_dir)
+    if latest_ckpt_fp != ckpt_fp:
+      print('Incept: {}'.format(latest_ckpt_fp))
+
+      sess = tf.Session()
+
+      gan_saver.restore(sess, latest_ckpt_fp)
+
+      _step = sess.run(step)
+
+      _G_z_feats = []
+      for i in range(0, args.incept_n, 100):
+        _G_z_feats.append(sess.run(G_z, {z: _zs[i:i+100]}))
+      _G_z_feats = np.concatenate(_G_z_feats, axis=0)
+      _G_zs = []
+      for i, _G_z in enumerate(_G_z_feats):
+        _G_z = feats_denorm(_G_z).astype(np.float64)
+        _audio = r9y9_melspec_to_waveform(_G_z, fs=FS, waveform_len=16384)
+        if i == 0:
+          out_fp = os.path.join(incept_dir, '{}.wav'.format(str(_step).zfill(9)))
+          save_as_wav(out_fp, FS, _audio)
+        _G_zs.append(_audio[:, 0, 0])
+
+      _preds = []
+      for i in range(0, args.incept_n, 100):
+        _preds.append(incept_sess.run(incept_preds, {incept_x: _G_zs[i:i+100]}))
+      _preds = np.concatenate(_preds, axis=0)
+
+      # Split into k groups
+      _incept_scores = []
+      split_size = args.incept_n // args.incept_k
+      for i in range(args.incept_k):
+        _split = _preds[i * split_size:(i + 1) * split_size]
+        _kl = _split * (np.log(_split) - np.log(np.expand_dims(np.mean(_split, 0), 0)))
+        _kl = np.mean(np.sum(_kl, 1))
+        _incept_scores.append(np.exp(_kl))
+
+      _incept_mean, _incept_std = np.mean(_incept_scores), np.std(_incept_scores)
+
+      # Summarize
+      with tf.Session(graph=summary_graph) as summary_sess:
+        _summaries = summary_sess.run(summaries, {incept_mean: _incept_mean, incept_std: _incept_std})
+      summary_writer.add_summary(_summaries, _step)
+
+      # Save
+      if _incept_mean > _best_score:
+        gan_saver.save(sess, os.path.join(incept_dir, 'best_score'), _step)
+        _best_score = _incept_mean
+
+      sess.close()
+
+      print('Done')
+
+      ckpt_fp = latest_ckpt_fp
+
+    time.sleep(1)
+
+  incept_sess.close()
+
+
 if __name__ == '__main__':
   from argparse import ArgumentParser
   import glob
@@ -154,28 +273,44 @@ if __name__ == '__main__':
 
   parser = ArgumentParser()
 
-  parser.add_argument('mode', type=str, choices=['train'])
+  parser.add_argument('mode', type=str, choices=['train', 'incept'])
   parser.add_argument('train_dir', type=str)
 
-  parser.add_argument('--data_dir', type=str, required=True)
+  parser.add_argument('--data_dir', type=str)
 
-  parser.add_argument('--train_ckpt_every_nsecs', type=int)
-  parser.add_argument('--train_summary_every_nsecs', type=int)
+  train_args = parser.add_argument_group('Train')
+  train_args.add_argument('--train_ckpt_every_nsecs', type=int)
+  train_args.add_argument('--train_summary_every_nsecs', type=int)
+
+  incept_args = parser.add_argument_group('Incept')
+  incept_args.add_argument('--incept_metagraph_fp', type=str,
+      help='Inference model for inception score')
+  incept_args.add_argument('--incept_ckpt_fp', type=str,
+      help='Checkpoint for inference model')
+  incept_args.add_argument('--incept_n', type=int,
+      help='Number of generated examples to test')
+  incept_args.add_argument('--incept_k', type=int,
+      help='Number of groups to test')
 
   parser.set_defaults(
       mode=None,
       train_dir=None,
       data_dir=None,
       train_ckpt_every_nsecs=600,
-      train_summary_every_nsecs=300)
+      train_summary_every_nsecs=300,
+      incept_metagraph_fp='./eval/inception/infer.meta',
+      incept_ckpt_fp='./eval/inception/best_acc-103005',
+      incept_n=5000,
+      incept_k=10)
 
   args = parser.parse_args()
 
   if not os.path.isdir(args.train_dir):
     os.makedirs(args.train_dir)
 
-  fps = glob.glob(os.path.join(args.data_dir, '*.wav'))
-  print('Found {} audio files'.format(len(fps)))
-
   if args.mode == 'train':
+    fps = glob.glob(os.path.join(args.data_dir, '*.wav'))
+    print('Found {} audio files'.format(len(fps)))
     train(fps, args)
+  elif args.mode == 'incept':
+    incept(args)
