@@ -109,49 +109,41 @@ class MelspecGANGenerator(object):
     else:
       batchnorm = lambda x: x
 
-    # project z to [batch_size, 4, 4, dim * 8]
+    # project z to [batch_size, 4, 5, dim * 8]
     with tf.variable_scope('z_proj'):
-      x = dense_layer(z, 4 * 4 * self.dim * 8)
-    x = tf.reshape(x, [-1, 4, 4, self.dim * 8])
+      x = dense_layer(z, 4 * 5 * self.dim * 8)
+    x = tf.reshape(x, [-1, 4, 5, self.dim * 8])
     x = batchnorm(x)
     x = tf.nn.relu(x)
 
-    # [4, 4, 8d] -> [8, 8, 4d]
+    # [4, 5, 8d] -> [8, 10, 4d]
     with tf.variable_scope('upconv_1'):
-      x = std_conv2d_transpose_layer(x, [8, 8, self.dim * 4])
+      x = std_conv2d_transpose_layer(x, [8, 10, self.dim * 4])
     x = batchnorm(x)
     x = tf.nn.relu(x)
 
-    # [8, 8, 4d] -> [16, 16, 2d]
+    # [8, 10, 4d] -> [16, 20, 2d]
     with tf.variable_scope('upconv_2'):
-      x = std_conv2d_transpose_layer(x, [16, 16, self.dim * 2])
+      x = std_conv2d_transpose_layer(x, [16, 20, self.dim * 2])
     x = batchnorm(x)
     x = tf.nn.relu(x)
 
-    # [16, 16, 2d] -> [32, 32, d]
+    # [16, 20, 2d] -> [32, 40, d]
     with tf.variable_scope('upconv_3'):
-      x = std_conv2d_transpose_layer(x, [32, 32, self.dim])
+      x = std_conv2d_transpose_layer(x, [32, 40, self.dim])
     x = batchnorm(x)
     x = tf.nn.relu(x)
 
-    # [32, 32, d] -> [64, 64, d]
+    # [32, 40, d] -> [64, 80, 1]
     with tf.variable_scope('upconv_4'):
-      x = std_conv2d_transpose_layer(x, [64, 64, self.dim])
-    x = batchnorm(x)
-    x = tf.nn.relu(x)
-
-    # [64, 64, d] -> [64, 80, 1]
-    with tf.variable_scope('upconv_5'):
-      x = conv2d_transpose_layer(x, [64, 80, 1],
-          kernel_h=1, kernel_w=self.kernel_len,
-          stride_h=1, stride_w=self.stride)
+      x = std_conv2d_transpose_layer(x, [64, 80, 1])
 
     x = self.nonlin(x)
 
     if training and self.batchnorm:
       update_ops = tf.get_collection(
           tf.GraphKeys.UPDATE_OPS, scope=tf.get_variable_scope().name)
-      assert len(update_ops) == 10
+      assert len(update_ops) == 8
       with tf.control_dependencies(update_ops):
         x = tf.identity(x)
 

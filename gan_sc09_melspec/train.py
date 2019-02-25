@@ -59,6 +59,7 @@ def train(fps, args):
   D = MelspecGANDiscriminator()
   with tf.name_scope('D_x'), tf.variable_scope('D'):
     D_x = D(x, training=True)
+  D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='D')
 
   # Make fake discriminator
   with tf.name_scope('D_G_z'), tf.variable_scope('D', reuse=True):
