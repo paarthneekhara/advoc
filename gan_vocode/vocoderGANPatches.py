@@ -16,6 +16,7 @@ class VocoderGAN(Model):
   gan_strategy = 'wgangp'
   recon_loss_type = 'wav' # wav, spec
   recon_objective = 'l1' # l1, l2
+  discriminator_type = "patched" # patched, regular
   recon_regularizer = 1. 
   train_batch_size = 64
 
@@ -142,20 +143,31 @@ class VocoderGAN(Model):
     with tf.variable_scope('downconv_3'):
       output = conv1d(output, self.dim * 8)
     output = lrelu(output)
-    output = phaseshuffle(output)
-
-    # [64, 512] -> [16, 1024]
-    with tf.variable_scope('downconv_4'):
-      output = conv1d(output, self.dim * 16)
-    output = lrelu(output)
-
-    output = conv1x1d(output, 1)
-
-    # flatten out the logits for each chunk of each 
-    # audio in the batch into a 1-d vector
-    output = tf.reshape(output, [batch_size * 16])
     
-    return output
+
+    if self.discriminator_type == "patched":
+      output = conv1x1d(output, 1)
+
+      return output[:,:,0,0]
+
+    elif self.discriminator_type == "regular":
+      # apply phase shuffle to the previous downconv
+      output = phaseshuffle(output)
+      with tf.variable_scope('downconv_4'):
+        output = conv1d(output, self.dim * 16)
+      output = lrelu(output)
+
+      # Flatten
+      output = tf.reshape(output, [batch_size, 4 * 4 * self.dim * 16])
+
+      # Connect to single logit
+      with tf.variable_scope('output'):
+        output = tf.layers.dense(output, 1)[:, 0]
+
+      return output
+    else:
+      raise NotImplementedError()
+
 
   def __call__(self, x_wav, x_spec):
     try:
@@ -206,8 +218,8 @@ class VocoderGAN(Model):
     # WGAN-GP loss
 
     if self.gan_strategy == 'dcgan':
-      fake = tf.zeros([D_x.shape[0]], dtype=tf.float32)
-      real = tf.ones([D_x.shape[0]], dtype=tf.float32)
+      fake = tf.zeros(D_x.shape, dtype=tf.float32)
+      real = tf.ones(D_x.shape, dtype=tf.float32)
 
       G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
         logits=D_G_z,
@@ -236,7 +248,7 @@ class VocoderGAN(Model):
         D_interp = self.build_discriminator(interpolates)
 
       gradients = tf.gradients(D_interp, [interpolates])[0]
-      slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2]))
+      slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2, 3]))
       gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
       D_loss += self.wgangp_lambda * gradient_penalty
 
@@ -249,7 +261,7 @@ class VocoderGAN(Model):
       raise NotImplementedError()
     
     # adding the reconstruction LOSS
-    G_loss += self.recon_regularizer * self.recon_loss
+    G_loss_total = G_loss + self.recon_regularizer * self.recon_loss
     
 
     # Optimizers
@@ -276,7 +288,7 @@ class VocoderGAN(Model):
           beta2=0.9)
 
     # Training ops
-    self.G_train_op = G_opt.minimize(G_loss, var_list=G_vars,
+    self.G_train_op = G_opt.minimize(G_loss_total, var_list=G_vars,
 	global_step=tf.train.get_or_create_global_step())
     self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
 
@@ -284,6 +296,7 @@ class VocoderGAN(Model):
     tf.summary.audio('x_wav', x_wav[:, :, 0, :], self.audio_fs)
     tf.summary.audio('G_z', G_z[:, :, 0, :], self.audio_fs)
     tf.summary.scalar('G_loss', G_loss)
+    tf.summary.scalar('G_loss_total', G_loss_total)
     tf.summary.scalar('Recon_loss', self.recon_loss)
     tf.summary.scalar('D_loss', D_loss)
 

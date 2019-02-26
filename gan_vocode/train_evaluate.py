@@ -22,7 +22,7 @@ def train(fps, args):
       subseq_len=model.subseq_len,
       audio_fs=model.audio_fs,
       audio_mono=True,
-      audio_normalize=True,
+      audio_normalize=False,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
       extract_type='r9y9_melspec',
@@ -30,7 +30,7 @@ def train(fps, args):
       repeat=True,
       shuffle=True,
       shuffle_buffer_size=512,
-      subseq_randomize_offset=args.data_randomize_offset,
+      subseq_randomize_offset=True,
       subseq_overlap_ratio=args.data_overlap_ratio,
       subseq_pad_end=True,
       prefetch_size=64 * 4,
@@ -60,7 +60,6 @@ if __name__ == '__main__':
 
   parser.add_argument('--data_dir', type=str, required=True)
   parser.add_argument('--data_fastwav', dest='data_fastwav', action='store_true')
-  parser.add_argument('--data_randomize_offset', dest='data_randomize_offset', action='store_true')
   parser.add_argument('--data_overlap_ratio', type=float)
 
   parser.add_argument('--model_overrides', type=str)
@@ -73,8 +72,7 @@ if __name__ == '__main__':
       train_dir=None,
       data_dir=None,
       data_fastwav=False,
-      data_randomize_offset=False,
-      data_overlap_ratio=0.,
+      data_overlap_ratio=0.25,
       model_overrides=None,
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60)
