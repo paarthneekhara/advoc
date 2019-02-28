@@ -1,8 +1,8 @@
 import numpy as np
 import tensorflow as tf
 
-from .audioio import decode_audio
-from .spectral import waveform_to_r9y9_melspec_tf
+from advoc.audioio import decode_audio
+from advoc.spectral import waveform_to_r9y9_melspec_tf
 
 
 def decode_extract_and_batch(
@@ -190,7 +190,7 @@ def decode_extract_and_batch(
     if prefetch_gpu_num is not None and prefetch_gpu_num >= 0:
       dataset = dataset.apply(
           tf.data.experimental.prefetch_to_device(
-            '/device:GPU:{}'.format(gpu_num)))
+            '/device:GPU:{}'.format(prefetch_gpu_num)))
 
   # Get tensors
   iterator = dataset.make_one_shot_iterator()
