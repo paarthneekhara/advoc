@@ -3,6 +3,7 @@ from functools import lru_cache
 import librosa
 import lws
 import numpy as np
+import tensorflow as tf
 
 
 def stft(x, nfft, nhop, pad_end=True):
@@ -36,6 +37,50 @@ def stft(x, nfft, nhop, pad_end=True):
         x = np.pad(x, [[0, pad_amt]], 'constant')
 
   return lws.lws(nfft, nhop, perfectrec=False).stft(x)[:, :, np.newaxis]
+
+
+def lws_hann_default(nfft, nhop, dtype=tf.float32):
+  """Constructs default LWS Hann window for parity between LWS/TF.
+
+  Args:
+    nfft: FFT size.
+    nhop: Shift amount.
+    dtype: Tensorflow datatype.
+
+  Returns:
+    Tensor dtype as specified of shape [nfft].
+  """
+  _hann = lws.hann(nfft, symmetric=True, use_offset=False)
+  _awin = np.sqrt(_hann * 2 * nhop / nfft)
+  return tf.constant(_awin, dtype=dtype)
+
+
+def stft_tf(x, nfft, nhop, pad_end=True):
+  """Constructs graph for short-time Fourier transform.
+
+  Args:
+    x: Tensor dtype float32 of shape [b, nsamps, 1, nch].
+    nfft: FFT size.
+    nhop: Shift amount.
+    pad_end: If true, pad incomplete frames at end of waveform.
+
+  Returns:
+    Tensor dtype complex64 of shape [b, ntsteps, (nfft // 2) + 1, 1] containing the features.
+  """
+  batch_size, nsamps, nfeats, nch = x.get_shape().as_list()
+  if nfeats != 1:
+    raise ValueError()
+  if nhop != 256:
+    raise ValueError()
+
+  window_fn = lambda _, dtype: lws_hann_default(nfft, nhop, dtype)
+
+  x = tf.transpose(x, [0, 3, 2, 1])
+  X = tf.contrib.signal.stft(x, nfft, nhop, window_fn=window_fn, pad_end=pad_end)
+  X = tf.squeeze(X, axis=2)
+  X = tf.transpose(X, [0, 2, 3, 1])
+
+  return X
 
 
 @lru_cache(maxsize=4)

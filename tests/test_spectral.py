@@ -4,6 +4,7 @@ import unittest
 
 import numpy as np
 from scipy.signal import hilbert as sphilbert
+import tensorflow as tf
 
 import advoc.audioio as audioio
 import advoc.spectral as spectral
@@ -43,6 +44,36 @@ class TestSpectralModule(unittest.TestCase):
     self.assertAlmostEqual(np.sum(X_mag), 2148.755, 3, 'invalid spec')
     self.assertAlmostEqual(np.sum(X_mag[33]), 55.455, 3, 'invalid spec')
     self.assertAlmostEqual(np.sum(X_mag[40]), 20.347, 3, 'invalid spec')
+
+
+  def test_stft_tf(self):
+    with tf.Graph().as_default():
+      x = tf.placeholder(tf.float32, [None, None, 1, None])
+      X = spectral.stft_tf(x, 1024, 256, pad_end=True)
+
+      self.assertEqual(X.dtype, tf.complex64)
+      self.assertEqual(X.get_shape().as_list(), [None, None, 513, None], 'invalid shape')
+
+      config = tf.ConfigProto(device_count={'GPU': 0})
+      with tf.Session(config=config) as sess:
+        _x = self.wav_sc09_16[np.newaxis]
+        self.assertEqual(_x.shape, (1, 16000, 1, 1), 'invalid wav length')
+
+        _X = sess.run(X, {x: _x})
+        self.assertEqual(_X.dtype, np.complex64)
+        self.assertEqual(_X.shape, (1, 63, 513, 1), 'invalid shape')
+
+        _x = np.pad(_x, [[0, 0], [0, 384], [0, 0], [0, 0]], 'constant')
+        _x = np.concatenate([self.wav_mono_22[np.newaxis, :16384], _x], axis=0)
+        _X = sess.run(X, {x: _x})
+        self.assertEqual(_X.shape, (2, 64, 513, 1), 'invalid shape')
+
+        _X_mag = np.abs(_X)
+        self.assertEqual(_X_mag.dtype, np.float32)
+        self.assertAlmostEqual(np.sum(_X_mag[0]), 160.600, 3, 'invalid spec')
+        self.assertAlmostEqual(np.sum(_X_mag[1]), 2148.754, 3, 'invalid spec')
+        self.assertAlmostEqual(np.sum(_X_mag[1, 33]), 55.455, 3, 'invalid spec')
+        self.assertAlmostEqual(np.sum(_X_mag[1, 40]), 20.347, 3, 'invalid spec')
 
 
   def test_tacotron2(self):
