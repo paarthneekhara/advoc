@@ -196,6 +196,86 @@ def eval(fps, args):
 
     time.sleep(1)
 
+def infer(fps, args):
+  if args.infer_dataset_name is not None:
+    infer_dir = os.path.join(args.train_dir,
+        'infer_{}'.format(args.eval_dataset_name))
+  else:
+    infer_dir = os.path.join(args.train_dir, 'infer_valid')
+  if not os.path.isdir(infer_dir):
+    os.makedirs(infer_dir)
+
+  # Initialize model
+  model = VocoderGAN(Modes.INFER)
+  model, summary = override_model_attrs(model, args.model_overrides)
+  print('-' * 80)
+  print(summary)
+  print('-' * 80)
+
+  # Load data
+  with tf.name_scope('loader'):
+    x_spec, x_wav = decode_extract_and_batch(
+      fps,
+      batch_size=1,
+      subseq_len= model.subseq_len * 8, #8 seconds
+      audio_fs=model.audio_fs,
+      audio_mono=True,
+      audio_normalize=False,
+      decode_fastwav=args.data_fastwav,
+      decode_parallel_calls=4,
+      extract_type='r9y9_melspec',
+      extract_parallel_calls=8,
+      repeat=False,
+      shuffle=False,
+      shuffle_buffer_size=None,
+      subseq_randomize_offset=False,
+      subseq_overlap_ratio=0.,
+      subseq_pad_end=True,
+      prefetch_size=None,
+      gpu_num=None)
+
+  # Create GAN generation graph
+  x_spec_sliced = tf.reshape(x_spec, [8, model.subseq_len, x_spec.shape[2], 1 ])
+  z = tf.random.normal([8, 1, 1, model.zdim], dtype=tf.float32)
+  z_tiled = z * tf.constant(1.0, shape=[8, model.subseq_len, 1, model.zdim])
+
+  # Generator
+  with tf.variable_scope('G') as vs:
+    G_z = model.build_generator(x_spec_sliced, z_tiled)
+
+  G_z_tiled = tf.reshape(G_z, x_wav.shape)
+  G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
+  step = tf.train.get_or_create_global_step()
+  step_op = tf.assign(step, step+1)
+  gan_saver = tf.train.Saver(var_list=G_vars, max_to_keep=1)
+
+  summaries = [
+    tf.summary.audio('infer_x_wav', x_wav[:, :, 0, :], model.audio_fs),
+    tf.summary.audio('infer_G_z', G_z_tiled[:, :, 0, :], model.audio_fs),
+  ]
+
+  summaries = tf.summary.merge(summaries)
+  # Create saver and summary writer
+  summary_writer = tf.summary.FileWriter(infer_dir)
+
+  
+    
+  ckpt_fp = args.infer_ckpt_path
+  print('Infereing From {}'.format(ckpt_fp))
+
+  with tf.Session() as sess:
+    gan_saver.restore(sess, ckpt_fp)
+    sess.run(step.initializer)
+    # _step = sess.run(gan_step)
+    while True:
+      try:
+        _summaries, _step, _ = sess.run([summaries, step, step_op])
+        summary_writer.add_summary(_summaries, _step)
+      except tf.errors.OutOfRangeError:
+        break
+    print('Done!')
+    
+
 if __name__ == '__main__':
   from argparse import ArgumentParser
   import glob
@@ -203,7 +283,7 @@ if __name__ == '__main__':
 
   parser = ArgumentParser()
 
-  parser.add_argument('mode', type=str, choices=['train', 'eval'])
+  parser.add_argument('mode', type=str, choices=['train', 'eval', 'infer'])
   parser.add_argument('train_dir', type=str)
 
   parser.add_argument('--data_dir', type=str, required=True)
@@ -213,6 +293,8 @@ if __name__ == '__main__':
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
   parser.add_argument('--train_summary_every_nsecs', type=int)
   parser.add_argument('--eval_dataset_name', type=str)
+  parser.add_argument('--infer_dataset_name', type=str)
+  parser.add_argument('--infer_ckpt_path', type=str)
 
   parser.set_defaults(
       mode=None,
@@ -223,7 +305,9 @@ if __name__ == '__main__':
       model_overrides=None,
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60,
-      eval_dataset_name=None
+      eval_dataset_name=None,
+      infer_dataset_name=None,
+      infer_ckpt_path=None
       )
 
   args = parser.parse_args()
@@ -238,4 +322,8 @@ if __name__ == '__main__':
     train(fps, args)
   elif args.mode == 'eval':
     eval(fps, args)
+  elif args.mode == 'infer':
+    infer(fps, args)
+  else:
+    raise NotImplementedError()
 

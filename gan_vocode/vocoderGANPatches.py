@@ -299,9 +299,11 @@ class VocoderGAN(Model):
     tf.summary.scalar('G_loss', G_loss)
     tf.summary.scalar('G_loss_total', G_loss_total)
     tf.summary.scalar('Recon_loss', self.recon_loss)
+    tf.summary.scalar('spec_l2', spec_l2)
+    tf.summary.scalar('wav_l1', wav_l1)
     tf.summary.scalar('D_loss', D_loss)
 
-  
+
   def train_loop(self, sess):
     num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
     for i in range(num_disc_updates):
