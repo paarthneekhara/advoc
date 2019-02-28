@@ -5,7 +5,7 @@ import lws
 import numpy as np
 import tensorflow as tf
 
-from .util import best_shape
+from advoc.util import best_shape
 
 
 def stft(x, nfft, nhop, pad_end=True):
