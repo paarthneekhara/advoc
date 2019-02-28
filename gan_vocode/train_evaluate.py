@@ -34,7 +34,7 @@ def train(fps, args):
       subseq_overlap_ratio=args.data_overlap_ratio,
       subseq_pad_end=True,
       prefetch_size=64 * 4,
-      gpu_num=0)
+      prefetch_gpu_num=0)
 
   # Create model
   model(x_wav, x_spec)
