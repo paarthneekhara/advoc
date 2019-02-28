@@ -37,7 +37,7 @@ def train(fps, args):
         subseq_overlap_ratio=0,
         subseq_pad_end=True,
         prefetch_size=TRAIN_BATCH_SIZE * 8,
-        gpu_num=0)
+        prefetch_gpu_num=args.data_prefetch_gpu_num)
     x = feats_norm(x)
 
   # Data summaries
@@ -277,6 +277,7 @@ if __name__ == '__main__':
   parser.add_argument('train_dir', type=str)
 
   parser.add_argument('--data_dir', type=str)
+  parser.add_argument('--data_prefetch_gpu_num', type=int)
 
   train_args = parser.add_argument_group('Train')
   train_args.add_argument('--train_ckpt_every_nsecs', type=int)
@@ -296,6 +297,7 @@ if __name__ == '__main__':
       mode=None,
       train_dir=None,
       data_dir=None,
+      data_prefetch_gpu_num=0,
       train_ckpt_every_nsecs=600,
       train_summary_every_nsecs=300,
       incept_metagraph_fp='./eval/inception/infer.meta',
