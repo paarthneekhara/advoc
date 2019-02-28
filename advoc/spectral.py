@@ -3,6 +3,9 @@ from functools import lru_cache
 import librosa
 import lws
 import numpy as np
+import tensorflow as tf
+
+from .util import best_shape
 
 
 def stft(x, nfft, nhop, pad_end=True):
@@ -36,6 +39,48 @@ def stft(x, nfft, nhop, pad_end=True):
         x = np.pad(x, [[0, pad_amt]], 'constant')
 
   return lws.lws(nfft, nhop, perfectrec=False).stft(x)[:, :, np.newaxis]
+
+
+def lws_hann_default(nfft, nhop, dtype=tf.float32):
+  """Constructs default LWS Hann window for parity between LWS/TF.
+
+  Args:
+    nfft: FFT size.
+    nhop: Shift amount.
+    dtype: Tensorflow datatype.
+
+  Returns:
+    Tensor dtype as specified of shape [nfft].
+  """
+  _hann = lws.hann(nfft, symmetric=True, use_offset=False)
+  _awin = np.sqrt(_hann * 2 * nhop / nfft)
+  return tf.constant(_awin, dtype=dtype)
+
+
+def stft_tf(x, nfft, nhop, pad_end=True):
+  """Constructs graph for short-time Fourier transform.
+
+  Args:
+    x: Tensor dtype float32 of shape [b, nsamps, 1, nch].
+    nfft: FFT size.
+    nhop: Shift amount.
+    pad_end: If true, pad incomplete frames at end of waveform.
+
+  Returns:
+    Tensor dtype complex64 of shape [b, ntsteps, (nfft // 2) + 1, 1] containing the features.
+  """
+  batch_size, nsamps, nfeats, nch = x.get_shape().as_list()
+  if nfeats != 1:
+    raise ValueError()
+
+  window_fn = lambda _, dtype: lws_hann_default(nfft, nhop, dtype)
+
+  x = tf.transpose(x, [0, 3, 2, 1])
+  X = tf.contrib.signal.stft(x, nfft, nhop, window_fn=window_fn, pad_end=pad_end)
+  X = tf.squeeze(X, axis=2)
+  X = tf.transpose(X, [0, 2, 3, 1])
+
+  return X
 
 
 @lru_cache(maxsize=4)
@@ -109,6 +154,79 @@ def waveform_to_melspec(
   return X_mel_dbnorm[:, :, np.newaxis]
 
 
+# NOTE: nfft and hop are configured for fs=20480
+def waveform_to_melspec_tf(
+    x,
+    fs,
+    nfft,
+    nhop,
+    mel_min=125,
+    mel_max=7600,
+    mel_num_bins=80,
+    norm_allow_clipping=True,
+    norm_min_level_db=-100,
+    norm_ref_level_db=20):
+  """Transforms batch of waveforms into mel spectrogram feature representation.
+
+  References:
+    - https://github.com/r9y9/wavenet_vocoder
+    - https://github.com/r9y9/wavenet_vocoder/blob/master/audio.py
+    - https://github.com/r9y9/wavenet_vocoder/blob/master/hparams.py
+
+  Args:
+    x: Tensor float32 of shape [b, nsamps, 1, nch].
+    fs: Sample rate of x.
+    nfft: FFT size.
+    nhop: Window size.
+    mel_min: Minimum frequency for mel transform.
+    mel_max: Maximum frequency for mel transform.
+    mel_num_bins: Number of mel bins.
+    norm_allow_clipping: If False, throws error if data is clipped during norm.
+    norm_min_level_db: Minimum dB level.
+    norm_ref_level_db: Maximum dB level (clips between this and 0).
+
+  Returns:
+    Tensor float32 of shape [b, ntsteps, nmels, 1] containing the features.
+  """
+  batch_size, nsamps, one, nch = best_shape(x)
+  if one != 1:
+    raise ValueError()
+  if x.dtype != tf.float32:
+    raise ValueError()
+
+  X = stft_tf(x, nfft, nhop)
+  _, ntsteps, nfeats, _ = best_shape(X)
+  X_mag = np.abs(X)
+
+  mel_filterbank = create_mel_filterbank(
+      fs, nfft, fmin=mel_min, fmax=mel_max, n_mels=mel_num_bins)
+  mel_filterbank = tf.constant(mel_filterbank, dtype=tf.float32)
+  X_mag = tf.transpose(X_mag, [0, 1, 3, 2])
+  X_mag = tf.reshape(X_mag, [batch_size * ntsteps * nch, nfeats])
+  X_mel = tf.matmul(X_mag, tf.transpose(mel_filterbank))
+  X_mel = tf.reshape(X_mel, [batch_size, ntsteps, nch, mel_num_bins])
+  X_mel = tf.transpose(X_mel, [0, 1, 3, 2])
+
+  min_level = np.exp(norm_min_level_db / 20 * np.log(10))
+  min_level = tf.constant(min_level, dtype=np.float32)
+
+  def tf_log10(x):
+    numerator = tf.log(x)
+    denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
+    return numerator / denominator
+
+  X_mel_db = 20 * tf_log10(tf.maximum(min_level, X_mel)) - norm_ref_level_db
+
+  if not norm_allow_clipping:
+    # TODO: TF assert
+    #assert X_mel_db.max() <= 0 and X_mel_db.min() - norm_min_level_db >= 0
+    raise NotImplementedError()
+  X_mel_dbnorm = tf.clip_by_value(
+      (X_mel_db - norm_min_level_db) / -norm_min_level_db, 0, 1)
+
+  return X_mel_dbnorm
+
+
 def waveform_to_tacotron2_melspec(x):
   """Transforms waveform into mel spectrogram feature representation.
 
@@ -145,6 +263,28 @@ def waveform_to_r9y9_melspec(x, fs=22050):
     nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
   """
   return waveform_to_melspec(
+      x,
+      fs=fs,
+      nfft=1024,
+      nhop=256)
+
+
+def waveform_to_r9y9_melspec_tf(x, fs=22050):
+  """Transforms waveform batch into unofficial mel spectrogram feature representation.
+
+  Transforms waveform into feature representation for unofficial reimplementation of WaveNet vocoder. Unit tests guaranteeing parity with implementation. References:
+    - https://github.com/r9y9/wavenet_vocoder
+    - https://github.com/r9y9/wavenet_vocoder/blob/master/audio.py
+    - https://github.com/r9y9/wavenet_vocoder/blob/master/hparams.py
+
+  Args:
+    x: nd-array dtype float32 of shape [?, 1, 1].
+    fs: Sample rate (should be 22050 to be the same as r9y9).
+
+  Returns:
+    nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
+  """
+  return waveform_to_melspec_tf(
       x,
       fs=fs,
       nfft=1024,

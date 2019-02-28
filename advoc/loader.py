@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from .audioio import decode_audio
-from .spectral import waveform_to_r9y9_melspec
+from .spectral import waveform_to_r9y9_melspec_tf
 
 
 def decode_extract_and_batch(
@@ -23,7 +23,7 @@ def decode_extract_and_batch(
     subseq_overlap_ratio=0,
     subseq_pad_end=False,
     prefetch_size=None,
-    gpu_num=None):
+    prefetch_gpu_num=None):
   """Decodes audio file paths into mini-batches of samples.
 
   Args:
@@ -85,21 +85,10 @@ def decode_extract_and_batch(
     subseq_pad_val = 0.
     dataset = dataset.map(lambda x: (x, x))
   elif extract_type == 'r9y9_melspec':
-    nmel = 80
     nhop = 256
 
     def _extract_feats_shaped(wav):
-      _extract_feats_closure = lambda _wav: waveform_to_r9y9_melspec(
-          _wav, fs=audio_fs).astype(np.float32)
-
-      feats = tf.py_func(
-          _extract_feats_closure,
-          [wav],
-          tf.float32,
-          stateful=False)
-      feats.set_shape([None, nmel, 1 if audio_mono else None])
-
-      return feats
+      return waveform_to_r9y9_melspec_tf(wav[tf.newaxis], fs=audio_fs)[0]
 
     feature_fs = audio_fs / nhop
     subseq_pad_val = 0.
@@ -198,12 +187,14 @@ def decode_extract_and_batch(
   # Queue up a number of batches on the CPU side
   if prefetch_size is not None:
     dataset = dataset.prefetch(prefetch_size)
-    if gpu_num is not None:
+    if prefetch_gpu_num is not None and prefetch_gpu_num >= 0:
       dataset = dataset.apply(
           tf.data.experimental.prefetch_to_device(
             '/device:GPU:{}'.format(gpu_num)))
 
   # Get tensors
   iterator = dataset.make_one_shot_iterator()
-  
-  return iterator.get_next()
+
+  x_feats, x_audio = iterator.get_next()
+
+  return tf.stop_gradient(x_feats), tf.stop_gradient(x_audio)
