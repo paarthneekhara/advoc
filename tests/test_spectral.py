@@ -117,18 +117,27 @@ class TestSpectralModule(unittest.TestCase):
       config = tf.ConfigProto(device_count={'GPU': 0})
       with tf.Session(config=config) as sess:
         _x = self.wav_mono_22[np.newaxis]
+        self.assertEqual(_x.shape, (1, 82432, 1, 1), 'invalid shape')
+
+        # Create random second channel
         np.random.seed(0)
+        _noise = np.random.uniform(low=-1, high=1, size=_x.shape)
+        _x = np.concatenate([_noise, _x], axis=3)
+
+        # Create random second item
         _noise = np.random.uniform(low=-1, high=1, size=_x.shape)
         _x = np.concatenate([_noise, _x], axis=0)
 
-        self.assertEqual(_x.shape, (2, 82432, 1, 1), 'invalid shape')
+        self.assertEqual(_x.shape, (2, 82432, 1, 2), 'invalid shape')
 
         _melspec = sess.run(melspec, {x: _x})
 
         self.assertEqual(_melspec.dtype, np.float32)
-        self.assertEqual(_melspec.shape, (2, 322, 80, 1), 'invalid shape')
-        self.assertAlmostEqual(np.sum(_melspec[0]), 18319.934, 3, 'incorrect sum')
-        self.assertAlmostEqual(np.sum(_melspec[1]), 5121.489, 3, 'incorrect sum')
+        self.assertEqual(_melspec.shape, (2, 322, 80, 2), 'invalid shape')
+        self.assertAlmostEqual(np.sum(_melspec[0, :, :, 0]), 18328.508, 3, 'incorrect sum')
+        self.assertAlmostEqual(np.sum(_melspec[0, :, :, 1]), 18332.746, 3, 'incorrect sum')
+        self.assertAlmostEqual(np.sum(_melspec[1, :, :, 0]), 18319.934, 3, 'incorrect sum')
+        self.assertAlmostEqual(np.sum(_melspec[1, :, :, 1]), 5121.489, 3, 'incorrect sum')
 
         # This array came directly from the r9y9/wavenet_vocoder codebase.
         # Its shape is [80, 325].
@@ -140,7 +149,7 @@ class TestSpectralModule(unittest.TestCase):
         # Therefore, we should skip comparison of first 3 frames.
         r9y9_melspec = np.swapaxes(r9y9_melspec, 0, 1)[np.newaxis, 3:, :, np.newaxis]
 
-        err = np.sum(np.abs(_melspec[1:].astype(np.float64) - r9y9_melspec))
+        err = np.sum(np.abs(_melspec[1:, :, :, 1:].astype(np.float64) - r9y9_melspec))
         self.assertAlmostEqual(err, 0.00731311, 8, 'not equal r9y9')
 
 
