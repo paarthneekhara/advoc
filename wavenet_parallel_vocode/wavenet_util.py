@@ -1,10 +1,11 @@
 import tensorflow as tf
 
+
 def self_condition(x, encoding):
   """Condition the input on the encoding.
   Args:
-    x: The [mb, length=64000, channels] float tensor input.
-    encoding: The [mb, encoding_length=125, channels] float tensor encoding.
+    x: The [mb, length, channels] float tensor input.
+    encoding: The [mb, encoding_length, channels] float tensor encoding.
   Returns:
     The output after broadcasting the encoding to x's shape and adding them.
   """
@@ -19,36 +20,6 @@ def self_condition(x, encoding):
   x = tf.reshape(x, [mb, length, channels])
   x.set_shape([mb, length, channels])
   return x
-
-
-def utils_mu_law(x, mu=255, int8=False):
-  """A TF implementation of Mu-Law encoding.
-  Args:
-    x: The audio samples to encode.
-    mu: The Mu to use in our Mu-Law.
-    int8: Use int8 encoding.
-  Returns:
-    out: The Mu-Law encoded int8 data.
-  """
-  out = tf.sign(x) * tf.log(1 + mu * tf.abs(x)) / np.log(1 + mu)
-  out = tf.floor(out * 128)
-  if int8:
-    out = tf.cast(out, tf.int8)
-  return out
-
-
-def masked_shift_right(x):
-  """Shift the input over by one and a zero to the front.
-  Args:
-    x: The [mb, time, channels] tensor input.
-  Returns:
-    x_sliced: The [mb, time, channels] tensor output.
-  """
-  shape = x.get_shape().as_list()
-  x_padded = tf.pad(x, [[0, 0], [1, 0], [0, 0]])
-  x_sliced = tf.slice(x_padded, [0, 0, 0], tf.stack([-1, shape[1], -1]))
-  x_sliced.set_shape(shape)
-  return x_sliced
 
 
 def masked_conv1d(x,
@@ -86,7 +57,7 @@ def masked_conv1d(x,
     biases = tf.get_variable(
         'biases', shape=biases_shape, initializer=biases_initializer)
 
-  x_ttb = masked_time_to_batch(x, dilation)
+  x_ttb = time_to_batch(x, dilation)
   if filter_length > 1 and causal:
     x_ttb = tf.pad(x_ttb, [[0, 0], [filter_length - 1, 0], [0, 0]])
 
@@ -97,40 +68,12 @@ def masked_conv1d(x,
   y = tf.nn.bias_add(y, biases)
   y_shape = y.get_shape().as_list()
   y = tf.reshape(y, [y_shape[0], y_shape[2], num_filters])
-  y = masked_batch_to_time(y, dilation)
+  y = batch_to_time(y, dilation)
   y.set_shape([batch_size, length, num_filters])
   return y
 
 
-def masked_pool1d(x, window_length, name, mode='avg', stride=None):
-  """1D pooling function that supports multiple different modes.
-  Args:
-    x: The [mb, time, channels] float tensor that we are going to pool over.
-    window_length: The amount of samples we pool over.
-    name: The name of the scope for the variables.
-    mode: The type of pooling, either avg or max.
-    stride: The stride length.
-  Returns:
-    pooled: The [mb, time // stride, channels] float tensor result of pooling.
-  """
-  if mode == 'avg':
-    pool_fn = tf.nn.avg_pool
-  elif mode == 'max':
-    pool_fn = tf.nn.max_pool
-
-  stride = stride or window_length
-  batch_size, length, num_channels = x.get_shape().as_list()
-  assert length % window_length == 0
-  assert length % stride == 0
-
-  window_shape = [1, 1, window_length, 1]
-  strides = [1, 1, stride, 1]
-  x_4d = tf.reshape(x, [batch_size, 1, length, num_channels])
-  pooled = pool_fn(x_4d, window_shape, strides, padding='SAME', name=name)
-  return tf.reshape(pooled, [batch_size, length // stride, num_channels])
-
-
-def masked_time_to_batch(x, block_size):
+def time_to_batch(x, block_size):
   """Splits time dimension (i.e. dimension 1) of `x` into batches.
   Within each batch element, the `k*block_size` time steps are transposed,
   so that the `k` time steps in each output batch element are offset by
@@ -152,13 +95,13 @@ def masked_time_to_batch(x, block_size):
       shape[0] * block_size, shape[1] // block_size, shape[2]
   ])
   y.set_shape([
-      masked_mul_or_none(shape[0], block_size), masked_mul_or_none(shape[1], 1. / block_size),
+      mul_or_none(shape[0], block_size), mul_or_none(shape[1], 1. / block_size),
       shape[2]
   ])
   return y
 
 
-def masked_batch_to_time(x, block_size):
+def batch_to_time(x, block_size):
   """Inverse of `time_to_batch(x, block_size)`.
   Args:
     x: Tensor of shape [nb*block_size, k, n] for some natural number k.
@@ -171,13 +114,13 @@ def masked_batch_to_time(x, block_size):
   y = tf.reshape(x, [shape[0] // block_size, block_size, shape[1], shape[2]])
   y = tf.transpose(y, [0, 2, 1, 3])
   y = tf.reshape(y, [shape[0] // block_size, shape[1] * block_size, shape[2]])
-  y.set_shape([masked_mul_or_none(shape[0], 1. / block_size),
-               masked_mul_or_none(shape[1], block_size),
+  y.set_shape([mul_or_none(shape[0], 1. / block_size),
+               mul_or_none(shape[1], block_size),
                shape[2]])
   return y
 
 
-def masked_mul_or_none(a, b):
+def mul_or_none(a, b):
   """Return the element wise multiplicative of the inputs.
   If either input is None, we return None.
   Args:

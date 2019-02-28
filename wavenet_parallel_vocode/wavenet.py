@@ -54,32 +54,31 @@ class WavenetVocoder(Model):
     l = z_wave
     en = x_spec
 
-    # x_scaled is [None, 64000, 1]
-    # convolve to expand channel depth to [None, 64000, 512] (initial input)
+    ###
+    # The WaveNet Decoder.
+    ###
     l = masked_conv1d(
-	l, num_filters=width, filter_length=filter_length, name='startconv')
+        l, num_filters=width, filter_length=filter_length, name='startconv')
 
     # Set up skip connections.
-    # this is first skip connection of [None, 64000, 256]
-    # why not just use l or x_scaled here?
     s = masked_conv1d(
-	l, num_filters=skip_width, filter_length=1, name='skip_start')
+        l, num_filters=skip_width, filter_length=1, name='skip_start')
 
     # Residual blocks with skip connections.
     for i in range(num_layers):
       dilation = 2**(i % num_stages)
       d = masked_conv1d(
-	  l,
-	  num_filters=2 * width,
-	  filter_length=filter_length,
-	  dilation=dilation,
-	  name='dilatedconv_%d' % (i + 1))
+          l,
+          num_filters=2 * width,
+          filter_length=filter_length,
+          dilation=dilation,
+          name='dilatedconv_%d' % (i + 1))
       d = self_condition(d,
-			  masked_conv1d(
-			      en,
-			      num_filters=2 * width,
-			      filter_length=1,
-			      name='cond_map_%d' % (i + 1)))
+                          masked_conv1d(
+                              en,
+                              num_filters=2 * width,
+                              filter_length=1,
+                              name='cond_map_%d' % (i + 1)))
 
       assert d.get_shape().as_list()[2] % 2 == 0
       m = d.get_shape().as_list()[2] // 2
@@ -88,18 +87,18 @@ class WavenetVocoder(Model):
       d = d_sigmoid * d_tanh
 
       l += masked_conv1d(
-	  d, num_filters=width, filter_length=1, name='res_%d' % (i + 1))
+          d, num_filters=width, filter_length=1, name='res_%d' % (i + 1))
       s += masked_conv1d(
-	  d, num_filters=skip_width, filter_length=1, name='skip_%d' % (i + 1))
+          d, num_filters=skip_width, filter_length=1, name='skip_%d' % (i + 1))
 
     s = tf.nn.relu(s)
     s = masked_conv1d(s, num_filters=skip_width, filter_length=1, name='out1')
     s = self_condition(s,
-			masked_conv1d(
-			    en,
-			    num_filters=skip_width,
-			    filter_length=1,
-			    name='cond_map_out1'))
+                        masked_conv1d(
+                            en,
+                            num_filters=skip_width,
+                            filter_length=1,
+                            name='cond_map_out1'))
     s = tf.nn.relu(s)
 
     ###
@@ -172,4 +171,5 @@ class WavenetVocoder(Model):
 
 
   def train_loop(self, sess):
-    sess.run(self.train_op)
+    run_options = tf.RunOptions(report_tensor_allocations_upon_oom=True)
+    sess.run(self.train_op, options=run_options)
