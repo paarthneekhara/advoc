@@ -19,6 +19,7 @@ class VocoderGAN(Model):
   discriminator_type = "patched" # patched, regular
   recon_regularizer = 1. 
   train_batch_size = 64
+  eval_batch_size = 1
 
   def build_generator(self, x_spec, z_tiled):
     x_spec = tf.transpose(x_spec, [0, 1, 3, 2])
@@ -300,6 +301,7 @@ class VocoderGAN(Model):
     tf.summary.scalar('Recon_loss', self.recon_loss)
     tf.summary.scalar('D_loss', D_loss)
 
+  
   def train_loop(self, sess):
     num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
     for i in range(num_disc_updates):
