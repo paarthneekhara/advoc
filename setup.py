@@ -15,14 +15,10 @@ setup(
     packages=find_packages(),
     install_requires=[
       'tensorflow-gpu==1.12.0',
+      'librosa==0.6.3',
       'lws==1.2',
       'numpy==1.16.1',
-      'scipy==1.2.1'
+      'scipy==1.2.1',
     ],
-    extras_require={
-      'audio_decoding': [
-        'librosa==0.6.3'
-      ]
-    },
     test_suite='tests'
 )
