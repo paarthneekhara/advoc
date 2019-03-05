@@ -108,7 +108,7 @@ def eval(fps, args):
 
   G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
   gan_step = tf.train.get_or_create_global_step()
-  gan_saver = tf.train.Saver(var_list=G_vars + [gan_step], max_to_keep=1)
+  gan_saver = tf.train.Saver(var_list=G_vars + [gan_step], max_to_keep=2)
 
   
   all_wav_l1 = tf.placeholder(tf.float32, [None])

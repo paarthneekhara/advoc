@@ -20,6 +20,7 @@ class VocoderGAN(Model):
   recon_regularizer = 1. 
   train_batch_size = 64
   eval_batch_size = 1
+  use_adversarial = True #Train as a GAN or not
 
   def build_generator(self, x_spec, z_tiled):
     x_spec = tf.transpose(x_spec, [0, 1, 3, 2])
@@ -30,7 +31,7 @@ class VocoderGAN(Model):
         strides=(self.stride, 1),
         padding='same')
     
-
+    # same as conv1x1d
     conv1x1d_transpose = lambda x, n: tf.layers.conv2d_transpose(
         x,
         n,
@@ -262,7 +263,10 @@ class VocoderGAN(Model):
       raise NotImplementedError()
     
     # adding the reconstruction LOSS
-    G_loss_total = G_loss + self.recon_regularizer * self.recon_loss
+    if self.use_adversarial:
+      G_loss_total = G_loss + self.recon_regularizer * self.recon_loss
+    else:
+      G_loss_total = self.recon_regularizer * self.recon_loss
     
 
     # Optimizers
@@ -296,18 +300,23 @@ class VocoderGAN(Model):
     # Summarize
     tf.summary.audio('x_wav', x_wav[:, :, 0, :], self.audio_fs)
     tf.summary.audio('G_z', G_z[:, :, 0, :], self.audio_fs)
-    tf.summary.scalar('G_loss', G_loss)
+    
     tf.summary.scalar('G_loss_total', G_loss_total)
     tf.summary.scalar('Recon_loss', self.recon_loss)
     tf.summary.scalar('spec_l2', spec_l2)
     tf.summary.scalar('wav_l1', wav_l1)
-    tf.summary.scalar('D_loss', D_loss)
+
+    if self.use_adversarial:
+      tf.summary.scalar('G_loss', G_loss)
+      tf.summary.scalar('D_loss', D_loss)
 
 
   def train_loop(self, sess):
-    num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
-    for i in range(num_disc_updates):
-      sess.run(self.D_train_op)
+    if self.use_adversarial:
+      # Run Discriminator update only in adversarial scenario
+      num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
+      for i in range(num_disc_updates):
+        sess.run(self.D_train_op)
     sess.run(self.G_train_op)
     
 
