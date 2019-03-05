@@ -11,15 +11,15 @@ from wavenet_util import *
 class WavenetVocoder(Model):
   # Data params
   audio_fs = 22050
-  subseq_len = 250
-  subseq_nsamps = 64000
+  subseq_len = 64
+  subseq_nsamps = 16384
 
   # NSynth decoder params
   num_stages = 10
   num_layers = 30
   filter_length = 3
-  width = 512
-  skip_width = 256
+  width = 256
+  skip_width = 128
 
   # NSynth encoder params
   ae_num_stages = 10
@@ -33,11 +33,11 @@ class WavenetVocoder(Model):
   input_noise = 'uniform'
 
   # Loss
-  recon_loss_type = 'wave' #'spec' # wave, spec
-  recon_objective = 'l1' #'l2' # l1, l2
+  recon_loss_type = 'spec' #'spec' # wave, spec
+  recon_objective = 'l2' #'l2' # l1, l2
 
   # Training
-  train_batch_size = 1
+  train_batch_size = 2
   train_lr = 1e-4
 
 
@@ -115,6 +115,7 @@ class WavenetVocoder(Model):
     batch_size = advoc.util.best_shape(x_wave, axis=0)
 
     # TODO: normalize spec??
+    # if so, make sure padding is -1 not 0
 
     # Noise var (phase)
     if self.input_noise == 'uniform':

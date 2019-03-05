@@ -40,7 +40,10 @@ def train(fps, args):
   model(x_spec, x_wav)
 
   # Train
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
   with tf.train.MonitoredTrainingSession(
+      config=config,
       checkpoint_dir=args.train_dir,
       save_checkpoint_secs=args.train_ckpt_every_nsecs,
       save_summaries_secs=args.train_summary_every_nsecs) as sess:
