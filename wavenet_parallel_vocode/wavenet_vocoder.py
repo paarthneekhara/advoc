@@ -4,11 +4,10 @@ import tensorflow as tf
 import advoc.util
 import advoc.spectral
 
-from model import Model, Modes
-from wavenet_util import *
+from model import AudioModel, Modes
 
 
-class WavenetVocoder(Model):
+class WavenetVocoder(AudioModel):
   # Data params
   audio_fs = 22050
   subseq_len = 64
