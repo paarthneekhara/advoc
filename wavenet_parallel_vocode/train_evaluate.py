@@ -14,7 +14,7 @@ _NAMED_MODELS = {
 
 def train(fps, args):
   # Initialize model
-  model = _NAMED_MODELS[args.model](args.mode)
+  model = _NAMED_MODELS[args.model](Modes.TRAIN)
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
   print(summary)
@@ -69,7 +69,7 @@ if __name__ == '__main__':
   parser.add_argument('train_dir', type=str)
 
   parser.add_argument('--data_dir', type=str, required=True)
-  parser.add_argument('--data_fastwav', dest='data_fastwav', action='store_true')
+  parser.add_argument('--data_librosa', dest='data_fastwav', action='store_false')
   parser.add_argument('--data_overlap_ratio', type=float)
 
   parser.add_argument('--model', type=str, choices=list(_NAMED_MODELS.keys()))
@@ -82,7 +82,7 @@ if __name__ == '__main__':
       mode=None,
       train_dir=None,
       data_dir=None,
-      data_fastwav=False,
+      data_fastwav=True,
       data_overlap_ratio=0.25,
       model='wavenet',
       model_overrides=None,
