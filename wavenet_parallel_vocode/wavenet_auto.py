@@ -25,6 +25,10 @@ class Wavenet(AudioModel):
   train_batch_size = 32
   train_lr = 2e-4
 
+  # Evaluation
+  eval_batch_size = 16
+  eval_batch_num = 16
+
   def __init__(self, mode):
     super().__init__(
         mode,
@@ -34,15 +38,15 @@ class Wavenet(AudioModel):
         audio_fs=self.audio_fs)
 
 
-  def __call__(self, x_spec, x_wave):
-    batch_size = advoc.util.best_shape(x_wave, axis=0)
+  def get_global_variables(self):
+    return self.global_vars
 
-    tf.summary.audio('x_wave', x_wave[:, :, 0, 0], self.audio_fs)
+
+  def __call__(self, x_spec, x_wave, train=False):
+    batch_size = advoc.util.best_shape(x_wave, axis=0)
 
     x_quantized = mu_law(x_wave[:,  :, 0])
     x_scaled = tf.cast(x_quantized, tf.float32) / 128.0
-
-    tf.summary.audio('x_mulaw', inv_mu_law(x_quantized)[:, :, 0], self.audio_fs)
 
     x_shift = tf.stop_gradient(shift_right(x_scaled))
     x_indices = tf.stop_gradient(tf.cast(x_quantized[:, :, 0], tf.int32) + 128)
@@ -57,22 +61,66 @@ class Wavenet(AudioModel):
           filter_length=self.filter_length,
           width=self.width,
           skip_width=self.skip_width)
-    decoder_vars = tf.trainable_variables(scope='decoder')
+    self.global_vars = tf.global_variables(scope='decoder')
+    trainable_vars = tf.trainable_variables(scope='decoder')
 
-    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+    self.nll = nll = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=x_indices,
         logits=logits)
-    loss = tf.reduce_mean(loss)
 
-    tf.summary.scalar('loss', loss)
+    if self.mode == Modes.TRAIN:
+      avg_nll = tf.reduce_mean(nll)
+      avg_nll_last = tf.reduce_mean(self.nll[:, -1])
 
-    opt = tf.train.AdamOptimizer(learning_rate=self.train_lr)
-    self.train_op = opt.minimize(
-        loss,
-        global_step=tf.train.get_or_create_global_step(),
-        var_list=decoder_vars)
+      tf.summary.scalar('nll', avg_nll)
+      tf.summary.scalar('nll_last', avg_nll)
+      tf.summary.scalar('ppl', tf.exp(avg_nll))
+      tf.summary.scalar('ppl_last', tf.exp(avg_nll_last))
+      tf.summary.audio('x_wave', x_wave[:, :, 0, 0], self.audio_fs)
+      tf.summary.audio('x_mulaw', inv_mu_law(x_quantized)[:, :, 0], self.audio_fs)
+
+      loss = avg_nll
+      opt = tf.train.AdamOptimizer(learning_rate=self.train_lr)
+      self.train_op = opt.minimize(
+          loss,
+          global_step=tf.train.get_or_create_global_step(),
+          var_list=trainable_vars)
+    elif self.mode == Modes.EVAL:
+      self.all_nll = tf.placeholder(tf.float32, [None, self.subseq_len])
+      avg_nll = tf.reduce_mean(self.all_nll)
+      avg_nll_last = tf.reduce_mean(self.all_nll[:, -1])
+
+      summaries = [
+          tf.summary.scalar('nll', avg_nll),
+          tf.summary.scalar('nll_last', avg_nll_last),
+          tf.summary.scalar('ppl', tf.exp(avg_nll)),
+          tf.summary.scalar('ppl_last', tf.exp(avg_nll_last)),
+      ]
+      self.summaries = tf.summary.merge(summaries)
+      self.best_avg_nll = None
 
 
   def train_loop(self, sess):
     run_options = tf.RunOptions(report_tensor_allocations_upon_oom=True)
     sess.run(self.train_op, options=run_options)
+
+
+  def eval_ckpt(self, sess):
+    _all_nll = []
+    for i in range(self.eval_batch_num):
+      try:
+        _nll = sess.run(self.nll)
+      except tf.errors.OutOfRangeError:
+        break
+      _all_nll.append(_nll)
+    _all_nll = np.concatenate(_all_nll, axis=0)
+
+    _summaries = sess.run(self.summaries, {self.all_nll: _all_nll})
+
+    _avg_nll = np.mean(_all_nll)
+    best = False
+    if self.best_avg_nll is None or _avg_nll < self.best_avg_nll:
+      best = True
+      self.best_avg_nll = _avg_nll
+
+    return best, _summaries

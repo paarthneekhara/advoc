@@ -14,10 +14,13 @@ class AudioModel(object):
   def __call__(self):
     raise Exception('Abstract method')
 
-  def train_loop(self):
+  def get_global_variables(self):
     raise Exception('Abstract method')
 
-  def eval_ckpt(self, ckpt_fp):
+  def train_loop(self, sess):
+    raise Exception('Abstract method')
+
+  def eval_ckpt(self, sess):
     raise Exception('Abstract method')
 
 
