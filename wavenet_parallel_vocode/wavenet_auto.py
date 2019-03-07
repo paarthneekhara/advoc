@@ -27,7 +27,7 @@ class Wavenet(AudioModel):
 
   # Evaluation
   eval_batch_size = 16
-  eval_batch_num = 16
+  eval_batch_num = 32
 
   def __init__(self, mode):
     super().__init__(
