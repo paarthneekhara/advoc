@@ -1,3 +1,4 @@
 advoc.egg-info
 *__pycache__*
 *.sh
+*.DS_Store
