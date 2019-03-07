@@ -105,6 +105,11 @@ def eval(fps, args):
   spec_l1 = tf.reduce_mean(tf.abs(target_spec_mag - gen_spec_mag))
   spec_l2 = tf.reduce_mean(tf.square(target_spec_mag - gen_spec_mag))
 
+  # WaveNet eval
+  wavenet_graph = tf.Graph()
+  with wavenet_graph.as_default():
+    saver = tf.train.import_meta_graph('infer.meta')
+
 
   G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
   gan_step = tf.train.get_or_create_global_step()
@@ -293,6 +298,8 @@ if __name__ == '__main__':
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
   parser.add_argument('--train_summary_every_nsecs', type=int)
   parser.add_argument('--eval_dataset_name', type=str)
+  parser.add_argument('--eval_wavenet_meta_fp', type=str)
+  parser.add_argument('--eval_wavenet_ckpt_fp', type=str)
   parser.add_argument('--infer_dataset_name', type=str)
   parser.add_argument('--infer_ckpt_path', type=str)
 
@@ -306,6 +313,8 @@ if __name__ == '__main__':
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60,
       eval_dataset_name=None,
+      eval_wavenet_meta_fp=None,
+      eval_wavenet_ckpt_fp=None,
       infer_dataset_name=None,
       infer_ckpt_path=None
       )
