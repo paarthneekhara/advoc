@@ -11,7 +11,7 @@ class AudioModel(object):
     self.subseq_len = subseq_len
     self.audio_fs = audio_fs
 
-  def __call__(self):
+  def __call__(self, x_spec, x_wave):
     raise Exception('Abstract method')
 
   def get_global_variables(self):

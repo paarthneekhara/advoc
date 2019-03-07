@@ -42,9 +42,7 @@ class Wavenet(AudioModel):
     return self.global_vars
 
 
-  def __call__(self, x_spec, x_wave, train=False):
-    batch_size = advoc.util.best_shape(x_wave, axis=0)
-
+  def __call__(self, x_spec, x_wave):
     x_quantized = mu_law(x_wave[:,  :, 0])
     x_scaled = tf.cast(x_quantized, tf.float32) / 128.0
 
