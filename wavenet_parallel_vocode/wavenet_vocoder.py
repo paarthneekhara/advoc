@@ -33,7 +33,7 @@ class WavenetVocoder(AudioModel):
 
   # Evaluation
   eval_batch_size = 16
-  eval_batch_num = 32
+  eval_batch_num = 16
   eval_wavenet_metagraph_fp = ''
   eval_wavenet_ckpt_fp = ''
 
