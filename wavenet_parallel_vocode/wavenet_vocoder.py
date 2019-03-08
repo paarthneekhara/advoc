@@ -20,7 +20,7 @@ class WavenetVocoder(AudioModel):
   filter_length = 3
   width = 256
   skip_width = 128
-  causal = True # TODO: change this
+  causal = True
 
   # Other model params
   input_type = 'gaussian_spec' #'gaussian_spec', 'uniform_spec', 'spec_none', 'spec_spec'
@@ -87,6 +87,7 @@ class WavenetVocoder(AudioModel):
       self.vocoded_wave = vocoded_wave = build_nsynth_wavenet_decoder(
           input_wave,
           input_spec,
+          causal=self.causal,
           output_width=1,
           num_stages=self.num_stages,
           num_layers=self.num_layers,

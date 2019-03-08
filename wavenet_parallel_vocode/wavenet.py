@@ -58,6 +58,7 @@ def build_nsynth_wavenet_encoder(
 def build_nsynth_wavenet_decoder(
     input_wave,
     conditioning_info,
+    causal=True,
     output_width=256,
     num_stages=10,
     num_layers=30,
@@ -71,7 +72,7 @@ def build_nsynth_wavenet_decoder(
   # The WaveNet Decoder.
   ###
   l = masked_conv1d(
-      l, num_filters=width, filter_length=filter_length, name='startconv')
+      l, num_filters=width, filter_length=filter_length, causal=causal, name='startconv')
 
   # Set up skip connections.
   s = masked_conv1d(
@@ -85,6 +86,7 @@ def build_nsynth_wavenet_decoder(
 	num_filters=2 * width,
 	filter_length=filter_length,
 	dilation=dilation,
+	causal=causal,
 	name='dilatedconv_%d' % (i + 1))
     if en is not None:
       d = self_condition(d,
