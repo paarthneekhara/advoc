@@ -83,7 +83,7 @@ def eval(fps, args):
       subseq_overlap_ratio=0.,
       subseq_pad_end=True,
       prefetch_size=None,
-      gpu_num=None)
+      prefetch_gpu_num=None)
 
   # Create GAN generation graph
   z = tf.random.normal([model.eval_batch_size, 1, 1, model.zdim], dtype=tf.float32)
@@ -105,6 +105,18 @@ def eval(fps, args):
   spec_l1 = tf.reduce_mean(tf.abs(target_spec_mag - gen_spec_mag))
   spec_l2 = tf.reduce_mean(tf.square(target_spec_mag - gen_spec_mag))
 
+  # WaveNet eval
+  wavenet_graph = tf.Graph()
+  with wavenet_graph.as_default():
+    wavenet_saver = tf.train.import_meta_graph(args.eval_wavenet_meta_fp)
+  wavenet_sess = tf.Session(graph=wavenet_graph)
+  wavenet_saver.restore(wavenet_sess, args.eval_wavenet_ckpt_fp)
+  wavenet_step = wavenet_graph.get_tensor_by_name('global_step:0')
+  wavenet_chop = wavenet_graph.get_tensor_by_name('input_chop:0')
+  wavenet_chopped = wavenet_graph.get_tensor_by_name('chopped:0')
+  wavenet_input_wave = wavenet_graph.get_tensor_by_name('input_wave:0')
+  wavenet_avg_nll = wavenet_graph.get_tensor_by_name('avg_nll:0')
+  print('Loaded WaveNet (step {})'.format(wavenet_sess.run(wavenet_step)))
 
   G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
   gan_step = tf.train.get_or_create_global_step()
@@ -115,21 +127,24 @@ def eval(fps, args):
   all_wav_l2 = tf.placeholder(tf.float32, [None])
   all_spec_l1 = tf.placeholder(tf.float32, [None])
   all_spec_l2 = tf.placeholder(tf.float32, [None])
+  wavenet_all_nll = tf.placeholder(tf.float32, [None])
 
   summaries = [
     tf.summary.scalar('wav_l1', tf.reduce_mean(all_wav_l1)),
     tf.summary.scalar('wav_l2', tf.reduce_mean(all_wav_l2)),
     tf.summary.scalar('spec_l1', tf.reduce_mean(all_spec_l1)),
-    tf.summary.scalar('spec_l2', tf.reduce_mean(all_spec_l2))
+    tf.summary.scalar('spec_l2', tf.reduce_mean(all_spec_l2)),
+    tf.summary.scalar('wavenet_nll', tf.reduce_mean(wavenet_all_nll))
   ]
-
   summaries = tf.summary.merge(summaries)
-  # Create saver and summary writer
+
+  # Create summary writer
   summary_writer = tf.summary.FileWriter(eval_dir)
 
   ckpt_fp = None
   _best_wav_l1 = np.inf
   _best_spec_l2 = np.inf
+  _best_wavenet_nll = np.inf
   while True:
     latest_ckpt_fp = tf.train.latest_checkpoint(args.train_dir)
     if latest_ckpt_fp != ckpt_fp:
@@ -140,6 +155,7 @@ def eval(fps, args):
         gan_saver.restore(sess, latest_ckpt_fp)
         _step = sess.run(gan_step)
 
+        _all_G_z_slices = []
         _all_wav_l1 = []
         _all_wav_l2 = []
         _all_spec_l1 = []
@@ -147,7 +163,8 @@ def eval(fps, args):
 
         while True:
           try:
-            _wav_l1, _wav_l2, _spec_l1, _spec_l2 = sess.run([
+            _G_z, _wav_l1, _wav_l2, _spec_l1, _spec_l2 = sess.run([
+              G_z,
               wav_l1, 
               wav_l2, 
               spec_l1, 
@@ -156,31 +173,49 @@ def eval(fps, args):
           except tf.errors.OutOfRangeError:
             break
 
+          for _G_z_waveform in _G_z:
+            _G_z_slices = wavenet_sess.run(wavenet_chopped, {wavenet_chop: _G_z_waveform})
+            _all_G_z_slices.append(_G_z_slices)
+
           _all_wav_l1.append(_wav_l1)
           _all_wav_l2.append(_wav_l2)
           _all_spec_l1.append(_spec_l1)
           _all_spec_l2.append(_spec_l2)
-
         
+        _wavenet_all_nll = []
+        _all_G_z_slices = np.concatenate(_all_G_z_slices, axis=0)
+        for i in range(0, _all_G_z_slices.shape[0], 16):
+          _wavenet_input_wave = _all_G_z_slices[i:i+16]
+          if _wavenet_input_wave.shape[0] == 16:
+            _wavenet_avg_nll = wavenet_sess.run(wavenet_avg_nll, {wavenet_input_wave: _wavenet_input_wave})
+            _wavenet_all_nll.append(_wavenet_avg_nll)
+
+        _wavenet_all_nll = np.concatenate(_wavenet_all_nll, axis=0)
+
         _all_wav_l1 = np.array(_all_wav_l1)
         _all_wav_l2 = np.array(_all_wav_l2)
         _all_spec_l1 = np.array(_all_spec_l1)
         _all_spec_l2 = np.array(_all_spec_l2)
 
-      
         _summaries = sess.run(summaries, 
           {
             all_wav_l1: _all_wav_l1, 
             all_wav_l2: _all_wav_l2, 
             all_spec_l1: _all_spec_l1, 
-            all_spec_l2: _all_spec_l2, 
+            all_spec_l2: _all_spec_l2,
+            wavenet_all_nll: _wavenet_all_nll
           }
         )
         summary_writer.add_summary(_summaries, _step)
 
         _all_wav_l1_np = np.mean(_all_wav_l1)
         _all_spec_l2_np = np.mean(_all_spec_l2)
+        _wavenet_all_nll = np.mean(_wavenet_all_nll)
 
+        if _wavenet_all_nll < _best_wavenet_nll:
+          gan_saver.save(sess, os.path.join(eval_dir, 'best_nll'), _step)
+          _best_wavenet_nll = _wavenet_all_nll
+          print("Saved best wavenet NLL!")
         
         if _all_wav_l1_np < _best_wav_l1:
           gan_saver.save(sess, os.path.join(eval_dir, 'best_wav_l1'), _step)
@@ -195,6 +230,9 @@ def eval(fps, args):
       print('Done!')
 
     time.sleep(1)
+
+  wavenet_sess.close()
+
 
 def infer(fps, args):
   if args.infer_dataset_name is not None:
@@ -293,6 +331,8 @@ if __name__ == '__main__':
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
   parser.add_argument('--train_summary_every_nsecs', type=int)
   parser.add_argument('--eval_dataset_name', type=str)
+  parser.add_argument('--eval_wavenet_meta_fp', type=str)
+  parser.add_argument('--eval_wavenet_ckpt_fp', type=str)
   parser.add_argument('--infer_dataset_name', type=str)
   parser.add_argument('--infer_ckpt_path', type=str)
 
@@ -306,6 +346,8 @@ if __name__ == '__main__':
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60,
       eval_dataset_name=None,
+      eval_wavenet_meta_fp=None,
+      eval_wavenet_ckpt_fp=None,
       infer_dataset_name=None,
       infer_ckpt_path=None
       )
