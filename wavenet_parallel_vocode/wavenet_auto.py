@@ -115,10 +115,10 @@ class Wavenet(AudioModel):
 
     _summaries = sess.run(self.summaries, {self.all_nll: _all_nll})
 
+    best = []
     _avg_nll = np.mean(_all_nll)
-    best = False
     if self.best_avg_nll is None or _avg_nll < self.best_avg_nll:
-      best = True
+      best.append('nll')
       self.best_avg_nll = _avg_nll
 
     return best, _summaries

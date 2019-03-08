@@ -34,6 +34,8 @@ class WavenetVocoder(AudioModel):
   # Evaluation
   eval_batch_size = 16
   eval_batch_num = 32
+  eval_wavenet_metagraph_fp = ''
+  eval_wavenet_ckpt_fp = ''
 
 
   def __init__(self, mode):
@@ -82,7 +84,7 @@ class WavenetVocoder(AudioModel):
       raise ValueError()
 
     with tf.variable_scope('decoder'):
-      vocoded_wave = build_nsynth_wavenet_decoder(
+      self.vocoded_wave = vocoded_wave = build_nsynth_wavenet_decoder(
           input_wave,
           input_spec,
           output_width=1,
@@ -102,10 +104,10 @@ class WavenetVocoder(AudioModel):
 
     vocoded_wave_spec = advoc.spectral.waveform_to_r9y9_melspec_tf(vocoded_wave, fs=self.audio_fs)
 
-    wav_l1 = tf.reduce_mean(tf.abs(vocoded_wave - x_wave))
-    wav_l2 = tf.reduce_mean(tf.square(vocoded_wave - x_wave))
-    spec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_spec - x_spec))
-    spec_l2 = tf.reduce_mean(tf.square(vocoded_wave_spec - x_spec))
+    self.wav_l1 = wav_l1 = tf.reduce_mean(tf.abs(vocoded_wave - x_wave))
+    self.wav_l2 = wav_l2 = tf.reduce_mean(tf.square(vocoded_wave - x_wave))
+    self.spec_l1 = spec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_spec - x_spec))
+    self.spec_l2 = spec_l2 = tf.reduce_mean(tf.square(vocoded_wave_spec - x_spec))
 
     if self.mode == Modes.TRAIN:
       if self.train_recon_domain == 'wave' and self.train_recon_norm == 'l1':
@@ -136,6 +138,18 @@ class WavenetVocoder(AudioModel):
           global_step=tf.train.get_or_create_global_step(),
           var_list=trainable_vars)
     elif self.mode == Modes.EVAL:
+      self.wavenet_sess = None
+      if len(self.eval_wavenet_metagraph_fp.strip()) > 0:
+        wavenet_graph = tf.Graph()
+        with wavenet_graph.as_default():
+          wavenet_saver = tf.train.import_meta_graph(self.eval_wavenet_metagraph_fp)
+        self.wavenet_sess = tf.Session(graph=wavenet_graph)
+        wavenet_saver.restore(self.wavenet_sess, self.eval_wavenet_ckpt_fp)
+        wavenet_step = wavenet_graph.get_tensor_by_name('global_step:0')
+        self.wavenet_input_wave = wavenet_graph.get_tensor_by_name('input_wave:0')
+        self.wavenet_avg_nll = wavenet_graph.get_tensor_by_name('avg_nll:0')
+        print('Loaded WaveNet (step {})'.format(self.wavenet_sess.run(wavenet_step)))
+
       self.all_nll = tf.placeholder(tf.float32, [None])
       self.all_wav_l1 = tf.placeholder(tf.float32, [None])
       self.all_wav_l2 = tf.placeholder(tf.float32, [None])
@@ -153,7 +167,7 @@ class WavenetVocoder(AudioModel):
       ]
       self.summaries = tf.summary.merge(summaries)
 
-      self.best_avg_nll = None
+      self.best_nll = None
       self.best_wav_l1 = None
       self.best_spec_l2 = None
 
@@ -163,5 +177,61 @@ class WavenetVocoder(AudioModel):
     sess.run(self.train_op, options=run_options)
 
 
-  def eval_ckpt(self, sess, wavenet_sess):
-    pass
+  def eval_ckpt(self, sess):
+    if self.wavenet_sess is not None and self.eval_batch_size != 16:
+      raise NotImplementedError()
+
+    _all_nll = []
+    _all_wav_l1 = []
+    _all_wav_l2 = []
+    _all_spec_l1 = []
+    _all_spec_l2 = []
+    for i in range(self.eval_batch_num):
+      try:
+        _vocoded_wave, _wav_l1, _wav_l2, _spec_l1, _spec_l2 = sess.run([
+          self.vocoded_wave,
+          self.wav_l1,
+          self.wav_l2,
+          self.spec_l1,
+          self.spec_l2
+        ])
+      except tf.errors.OutOfRangeError:
+        break
+
+      if self.wavenet_sess is not None:
+        _avg_nll = self.wavenet_sess.run(self.wavenet_avg_nll, {self.wavenet_input_wave: _vocoded_wave})
+        _all_nll.append(_avg_nll)
+
+      _all_wav_l1.append(_wav_l1)
+      _all_wav_l2.append(_wav_l2)
+      _all_spec_l1.append(_spec_l1)
+      _all_spec_l2.append(_spec_l2)
+
+    _all_nll = np.concatenate(_all_nll, axis=0)
+
+    _summaries = sess.run(self.summaries, {
+      self.all_nll: _all_nll,
+      self.all_wav_l1: _all_wav_l1,
+      self.all_wav_l2: _all_wav_l2,
+      self.all_spec_l1: _all_spec_l1,
+      self.all_spec_l2: _all_spec_l2
+    })
+
+    best = []
+
+    _avg_nll = np.mean(_all_nll)
+    if self.best_nll is None or _avg_nll < self.best_nll:
+      best.append('wavenet_nll')
+      self.best_nll = _avg_nll
+
+    _avg_wav_l1 = np.mean(_all_wav_l1)
+    if self.best_wav_l1 is None or _avg_wav_l1 < self.best_wav_l1:
+      best.append('wav_l1')
+      self.best_wav_l1 = _avg_wav_l1
+
+    _avg_spec_l2 = np.mean(_all_spec_l2)
+    if self.best_spec_l2 is None or _avg_spec_l2 < self.best_spec_l2:
+      best.append('spec_l2')
+      self.best_spec_l2 = _avg_spec_l2
+
+    return best, _summaries

@@ -121,8 +121,8 @@ def eval(fps, args):
         best, summaries = model.eval_ckpt(sess)
         summary_writer.add_summary(summaries, global_step=_step)
 
-        if best:
-          saver.save(sess, os.path.join(eval_dir, 'best'), global_step=_step)
+        for best_attr in best:
+          saver.save(sess, os.path.join(eval_dir, 'best_{}'.format(best_attr)), global_step=_step)
 
       print('Done')
 
@@ -152,6 +152,8 @@ if __name__ == '__main__':
   parser.add_argument('--train_summary_every_nsecs', type=int)
 
   parser.add_argument('--eval_subset', type=str)
+  parser.add_argument('--eval_wavenet_meta_fp', type=str)
+  parser.add_argument('--eval_wavenet_ckpt_fp', type=str)
 
   parser.set_defaults(
       mode=None,
@@ -163,7 +165,9 @@ if __name__ == '__main__':
       model_overrides=None,
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60,
-      eval_subset='validation')
+      eval_subset='validation',
+      eval_wavenet_meta_fp=None,
+      eval_wavenet_ckpt_fp=None)
 
   args = parser.parse_args()
 
