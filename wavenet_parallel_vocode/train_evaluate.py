@@ -46,7 +46,7 @@ def train(fps, args):
       prefetch_gpu_num=0)
 
   # Create model
-  model(x_spec, x_wav, train=True)
+  model(x_spec, x_wav)
 
   # Train
   config = tf.ConfigProto()

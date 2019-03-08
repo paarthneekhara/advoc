@@ -5,6 +5,7 @@ import advoc.util
 import advoc.spectral
 
 from model import AudioModel, Modes
+from wavenet import build_nsynth_wavenet_decoder
 
 
 class WavenetVocoder(AudioModel):
@@ -22,12 +23,12 @@ class WavenetVocoder(AudioModel):
   causal = True # TODO: change this
 
   # Other model params
-  inputs = 'gaussian_spec' # 'uniform_spec', 'spec_none', 'spec_spec'
+  input_type = 'spec_spec' #'gaussian_spec' # 'uniform_spec', 'spec_none', 'spec_spec'
 
   # Training
   train_recon_domain = 'spec' #'spec' # wave, spec
   train_recon_norm = 'l2' #'l2' # l1, l2
-  train_batch_size = 2
+  train_batch_size = 32
   train_lr = 2e-4
 
   # Evaluation
@@ -49,27 +50,39 @@ class WavenetVocoder(AudioModel):
 
 
   def __call__(self, x_spec, x_wave):
-    batch_size = advoc.util.best_shape(x_wave, axis=0)
+    batch_size, _, nmels, _ = advoc.util.best_shape(x_spec)
 
-    if self.input_wave == 'uniform_spec':
+    if self.input_type == 'uniform_spec':
       input_wave = tf.random.uniform([batch_size, self.subseq_nsamps, 1], minval=-1, maxval=1, dtype=tf.float32)
       input_spec = x_spec[:, :, :, 0]
-    elif self.input_wave == 'gaussian_spec':
+    elif self.input_type == 'gaussian_spec':
       input_wave = tf.random.normal([batch_size, self.subseq_nsamps, 1], dtype=tf.float32)
       input_spec = x_spec[:, :, :, 0]
-    elif self.input_wave == 'spec_none':
+    elif self.input_type == 'spec_none':
       input_wave = x_spec[:, :, :, 0]
-      # TODO: upsample
+
+      # Upsample [32, 24, 80] to [32, 6144, 80]
+      input_wave = input_wave[:, :, tf.newaxis, :]
+      compression = self.subseq_nsamps // self.subseq_len
+      input_wave = tf.tile(input_wave, [1, 1, compression, 1])
+      input_wave = tf.reshape(input_wave, [batch_size, -1, nmels])
+
       input_spec = None
-    elif self.input_wave == 'spec_spec':
+    elif self.input_type == 'spec_spec':
       input_wave = x_spec[:, :, :, 0]
-      # TODO: upsample
+
+      # Upsample [32, 24, 80] to [32, 6144, 80]
+      input_wave = input_wave[:, :, tf.newaxis, :]
+      compression = self.subseq_nsamps // self.subseq_len
+      input_wave = tf.tile(input_wave, [1, 1, compression, 1])
+      input_wave = tf.reshape(input_wave, [batch_size, -1, nmels])
+
       input_spec = x_spec[:, :, :, 0]
     else:
       raise ValueError()
 
     with tf.variable_scope('decoder'):
-      vocoded_wave = build_nsynth_decoder(
+      vocoded_wave = build_nsynth_wavenet_decoder(
           input_wave,
           input_spec,
           output_width=1,
@@ -121,7 +134,7 @@ class WavenetVocoder(AudioModel):
       self.train_op = opt.minimize(
           loss,
           global_step=tf.train.get_or_create_global_step(),
-          var_list=vocoder_vars)
+          var_list=trainable_vars)
     elif self.mode == Modes.EVAL:
       pass
 
