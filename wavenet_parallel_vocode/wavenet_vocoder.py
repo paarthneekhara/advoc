@@ -136,7 +136,26 @@ class WavenetVocoder(AudioModel):
           global_step=tf.train.get_or_create_global_step(),
           var_list=trainable_vars)
     elif self.mode == Modes.EVAL:
-      pass
+      self.all_nll = tf.placeholder(tf.float32, [None])
+      self.all_wav_l1 = tf.placeholder(tf.float32, [None])
+      self.all_wav_l2 = tf.placeholder(tf.float32, [None])
+      self.all_spec_l1 = tf.placeholder(tf.float32, [None])
+      self.all_spec_l2 = tf.placeholder(tf.float32, [None])
+
+      avg_nll = tf.reduce_mean(self.all_nll)
+      summaries = [
+          tf.summary.scalar('nll', avg_nll),
+          tf.summary.scalar('ppl', tf.exp(avg_nll)),
+          tf.summary.scalar('wav_l1', tf.reduce_mean(self.all_wav_l1)),
+          tf.summary.scalar('wav_l2', tf.reduce_mean(self.all_wav_l2)),
+          tf.summary.scalar('spec_l1', tf.reduce_mean(self.all_spec_l1)),
+          tf.summary.scalar('spec_l2', tf.reduce_mean(self.all_spec_l2))
+      ]
+      self.summaries = tf.summary.merge(summaries)
+
+      self.best_avg_nll = None
+      self.best_wav_l1 = None
+      self.best_spec_l2 = None
 
 
   def train_loop(self, sess):
@@ -144,5 +163,5 @@ class WavenetVocoder(AudioModel):
     sess.run(self.train_op, options=run_options)
 
 
-  def eval_ckpt(self, sess):
+  def eval_ckpt(self, sess, wavenet_sess):
     pass
