@@ -23,7 +23,7 @@ class WavenetVocoder(AudioModel):
   causal = True # TODO: change this
 
   # Other model params
-  input_type = 'spec_spec' #'gaussian_spec' # 'uniform_spec', 'spec_none', 'spec_spec'
+  input_type = 'gaussian_spec' #'gaussian_spec', 'uniform_spec', 'spec_none', 'spec_spec'
 
   # Training
   train_recon_domain = 'spec' #'spec' # wave, spec
