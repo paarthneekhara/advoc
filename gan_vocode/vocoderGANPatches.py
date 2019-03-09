@@ -2,6 +2,16 @@ import tensorflow as tf
 
 from model import Model, Modes
 
+
+def _conv_filter(input_, k_size=5, stddev=0.02):
+  w_t = tf.get_variable('w', [k_size, 1, input_.get_shape()[-1], 1])
+  conv = tf.nn.depthwise_conv2d(input_, w_t, strides=[1, 1, 1, 1], padding='SAME')
+  biases = tf.get_variable('biases', [input_.get_shape()[-1]], initializer=tf.constant_initializer(0.0))
+  conv = tf.reshape(tf.nn.bias_add(conv, biases), conv.get_shape())
+  
+  return conv
+
+
 class VocoderGAN(Model):
   audio_fs = 22050
   subseq_len = 64
@@ -21,6 +31,8 @@ class VocoderGAN(Model):
   train_batch_size = 64
   eval_batch_size = 1
   use_adversarial = True #Train as a GAN or not
+  gen_filter_all = True
+  gen_filter_last = True
 
   def build_generator(self, x_spec, z_tiled):
     x_spec = tf.transpose(x_spec, [0, 1, 3, 2])
@@ -38,6 +50,16 @@ class VocoderGAN(Model):
         (1, 1),
         strides=(1, 1),
         padding='same')
+
+    if self.gen_filter_all:
+      conv_filter = lambda x, k: _conv_filter(x, k)
+    else:
+      conv_filter = lambda x, k: x
+
+    if self.gen_filter_all or self.gen_filter_last:
+      conv_filter_last = lambda x, k: _conv_filter(x, k)
+    else:
+      conv_filter_last = lambda x, k: x
 
     if self.gen_nonlin == 'relu':
       nonlin = lambda x: tf.nn.relu(x)
@@ -57,24 +79,28 @@ class VocoderGAN(Model):
     # [64, 512] -> [256, 256]
     with tf.variable_scope('upconv_1'):
       x = conv1d_transpose(x, self.dim * 4)
+      x = conv_filter(x, 8)
     x = nonlin(x)
 
     # Layer 2
     # [256, 256] -> [1024, 128]
     with tf.variable_scope('upconv_2'):
       x = conv1d_transpose(x, self.dim * 2)
+      x = conv_filter(x, 32)
     x = nonlin(x)
 
     # Layer 3
     # [1024, 128] -> [4096, 64]
     with tf.variable_scope('upconv_3'):
       x = conv1d_transpose(x, self.dim)
+      x = conv_filter(x, 128)
     x = nonlin(x)
 
     # Layer 4
     # [4096, 64] -> [16384, 1]
     with tf.variable_scope('upconv_4'):
       x = conv1d_transpose(x, 1)
+    x = conv_filter_last(x, 512)
     x = tf.nn.tanh(x)
 
     return x
@@ -294,7 +320,7 @@ class VocoderGAN(Model):
 
     # Training ops
     self.G_train_op = G_opt.minimize(G_loss_total, var_list=G_vars,
-	global_step=tf.train.get_or_create_global_step())
+  global_step=tf.train.get_or_create_global_step())
     self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
 
     # Summarize
