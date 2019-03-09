@@ -6,10 +6,16 @@ import numpy as np
 import lws
 
 from vocoderGANPatches import VocoderGAN
+from util import override_model_attrs
 
 fn = 'real_sc09.wav'
+
+
 nsteps = int(sys.argv[1])
 fext = str(sys.argv[2])
+_gen_filter_all = str(sys.argv[3]) # True, False
+_gen_filter_last = str(sys.argv[4]) # True, False
+
 spec = 'wavenet_vocoder_mel'
 use_noise = True
 learn_noise = False
@@ -84,6 +90,13 @@ noise = noise[tf.newaxis, :, tf.newaxis, :]
 print("X_spec", X_spec)
 print("noise", noise)
 vg = VocoderGAN('TRAIN')
+
+vg, summary = override_model_attrs(vg, 
+  "gen_filter_all={},gen_filter_last={}".format(_gen_filter_all, _gen_filter_last))
+print('-' * 80)
+print(summary)
+print('-' * 80)
+
 with tf.variable_scope('Dec'):
   Dec_x = vg.build_generator(X_spec, noise)
   print("Dec_x", Dec_x)
@@ -106,13 +119,14 @@ with tf.Session() as sess:
   sess.run(tf.global_variables_initializer())
 
   for i in range(nsteps):
-    print(i)
-    sess.run(train)
+    _loss, _ = sess.run((loss, train))
+    if i % 100 == 0:
+      print("Step {} of {}. Loss = {}".format(i, nsteps, _loss))
+
 
   _Dec_x = sess.run(Dec_x)[0,:,0,0]
-  print(_Dec_x)
   _Dec_x *= 32767.
   _Dec_x = np.clip(_Dec_x, -32768., 32767.)
   _Dec_x = _Dec_x.astype(np.int16)
-
-  wavwrite('overfit_{}_{}.wav'.format(nsteps, fext), fs, _Dec_x)
+  print("Final Loss = {}".format(_loss) )
+  wavwrite('OverfitExperiments/overfit_{}_{}_l={}.wav'.format(nsteps, fext, int(_loss * 10000) ), fs, _Dec_x)
