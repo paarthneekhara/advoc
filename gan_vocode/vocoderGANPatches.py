@@ -31,8 +31,8 @@ class VocoderGAN(Model):
   train_batch_size = 64
   eval_batch_size = 1
   use_adversarial = True #Train as a GAN or not
-  gen_filter_all = True
-  gen_filter_last = True
+  gen_filter_all = False
+  gen_filter_last = False
 
   def build_generator(self, x_spec, z_tiled):
     x_spec = tf.transpose(x_spec, [0, 1, 3, 2])
