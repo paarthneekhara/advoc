@@ -185,7 +185,7 @@ class WavenetVocoder(AudioModel):
 
         D_opt = tf.train.AdamOptimizer(learning_rate=self.train_lr)
         self.D_train_op = D_opt.minimize(
-            loss,
+            D_loss,
             var_list=D_vars)
 
         tf.summary.scalar('D_loss', D_loss)
