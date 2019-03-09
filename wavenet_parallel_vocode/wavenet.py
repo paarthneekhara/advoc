@@ -50,7 +50,7 @@ def build_nsynth_wavenet_encoder(
       num_filters=ae_bottleneck_width,
       filter_length=1,
       name='ae_bottleneck')
-  en = masked.pool1d(en, ae_hop_length, name='ae_pool', mode='avg')
+  en = masked_pool1d(en, ae_hop_length, name='ae_pool', mode='avg')
 
   return en
 
@@ -196,6 +196,34 @@ def masked_conv1d(x,
   y = batch_to_time(y, dilation)
   y.set_shape([batch_size, length, num_filters])
   return y
+
+
+def masked_pool1d(x, window_length, name, mode='avg', stride=None):
+  """1D pooling function that supports multiple different modes.
+  Args:
+    x: The [mb, time, channels] float tensor that we are going to pool over.
+    window_length: The amount of samples we pool over.
+    name: The name of the scope for the variables.
+    mode: The type of pooling, either avg or max.
+    stride: The stride length.
+  Returns:
+    pooled: The [mb, time // stride, channels] float tensor result of pooling.
+  """
+  if mode == 'avg':
+    pool_fn = tf.nn.avg_pool
+  elif mode == 'max':
+    pool_fn = tf.nn.max_pool
+
+  stride = stride or window_length
+  batch_size, length, num_channels = x.get_shape().as_list()
+  assert length % window_length == 0
+  assert length % stride == 0
+
+  window_shape = [1, 1, window_length, 1]
+  strides = [1, 1, stride, 1]
+  x_4d = tf.reshape(x, [batch_size, 1, length, num_channels])
+  pooled = pool_fn(x_4d, window_shape, strides, padding='SAME', name=name)
+  return tf.reshape(pooled, [batch_size, length // stride, num_channels])
 
 
 def time_to_batch(x, block_size):

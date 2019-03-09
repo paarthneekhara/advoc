@@ -5,7 +5,7 @@ import advoc.util
 import advoc.spectral
 
 from model import AudioModel, Modes
-from wavenet import build_nsynth_wavenet_decoder
+from wavenet import build_nsynth_wavenet_decoder, build_nsynth_wavenet_encoder
 
 
 class WavenetVocoder(AudioModel):
@@ -22,12 +22,23 @@ class WavenetVocoder(AudioModel):
   skip_width = 128
   causal = True
 
+  # NSynth encoder params
+  ae_num_stages = 10
+  ae_num_layers = 30
+  ae_filter_length = 3
+  ae_width = 128
+  ae_hop_length = 512
+
   # Other model params
   input_type = 'gaussian_spec' #'gaussian_spec', 'uniform_spec', 'spec_none', 'spec_spec'
 
   # Training
   train_recon_domain = 'spec' #'spec' # wave, spec
   train_recon_norm = 'l2' #'l2' # l1, l2
+  train_recon_multiplier = 1.
+  train_gan = False
+  train_gan_objective = 'dcgan'
+  train_gan_multiplier = 1.
   train_batch_size = 32
   train_lr = 2e-4
 
@@ -83,7 +94,7 @@ class WavenetVocoder(AudioModel):
     else:
       raise ValueError()
 
-    with tf.variable_scope('decoder'):
+    with tf.variable_scope('vocoder'):
       self.vocoded_wave = vocoded_wave = build_nsynth_wavenet_decoder(
           input_wave,
           input_spec,
@@ -94,8 +105,8 @@ class WavenetVocoder(AudioModel):
           filter_length=self.filter_length,
           width=self.width,
           skip_width=self.skip_width)[:, :, tf.newaxis, :]
-    self.global_vars = tf.global_variables(scope='decoder')
-    trainable_vars = tf.trainable_variables(scope='decoder')
+    self.global_vars = tf.global_variables(scope='vocoder')
+    trainable_vars = tf.trainable_variables(scope='vocoder')
     assert len(self.global_vars) == len(trainable_vars)
 
     num_params = 0
@@ -112,15 +123,73 @@ class WavenetVocoder(AudioModel):
 
     if self.mode == Modes.TRAIN:
       if self.train_recon_domain == 'wave' and self.train_recon_norm == 'l1':
-        loss = wav_l1
+        loss = self.train_recon_multiplier * wav_l1
       elif self.train_recon_domain == 'wave' and self.train_recon_norm == 'l2':
-        loss = wav_l2
+        loss = self.train_recon_multiplier * wav_l2
       elif self.train_recon_domain == 'spec' and self.train_recon_norm == 'l1':
-        loss = spec_l1
+        loss = self.train_recon_multiplier * spec_l1
       elif self.train_recon_domain == 'spec' and self.train_recon_norm == 'l2':
-        loss = spec_l2
+        loss = self.train_recon_multiplier * spec_l2
       else:
         raise ValueError()
+
+      if self.train_gan:
+        with tf.variable_scope('discriminator'):
+          # TODO: get spec into encoder somehow
+          D_x = build_nsynth_wavenet_encoder(
+              x_wave[:, :, 0, :],
+              num_stages=self.ae_num_stages,
+              num_layers=self.ae_num_layers,
+              filter_length=self.ae_filter_length,
+              width=self.ae_width,
+              hop_length=self.ae_hop_length,
+              bottleneck_width=1)
+        D_vars = tf.trainable_variables(scope='discriminator')
+        assert len(D_vars) == len(tf.global_variables('discriminator'))
+
+        with tf.variable_scope('discriminator', reuse=True):
+          D_G_z = build_nsynth_wavenet_encoder(
+              vocoded_wave[:, :, 0, :],
+              num_stages=self.ae_num_stages,
+              num_layers=self.ae_num_layers,
+              filter_length=self.ae_filter_length,
+              width=self.ae_width,
+              hop_length=self.ae_hop_length,
+              bottleneck_width=1)
+
+        if self.train_gan_objective == 'dcgan':
+          fake = tf.zeros_like(D_G_z)
+          real = tf.ones_like(D_x)
+
+          G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            logits=D_G_z,
+            labels=real
+          ))
+
+          D_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            logits=D_G_z,
+            labels=fake
+          ))
+          D_loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            logits=D_x,
+            labels=real
+          ))
+
+          D_loss /= 2.
+
+          self.train_gan_num_disc_updates = 1
+        else:
+          raise ValueError()
+
+        loss += self.train_gan_multiplier * G_loss
+
+        D_opt = tf.train.AdamOptimizer(learning_rate=self.train_lr)
+        self.D_train_op = D_opt.minimize(
+            loss,
+            var_list=D_vars)
+
+        tf.summary.scalar('D_loss', D_loss)
+        tf.summary.scalar('G_loss', G_loss)
 
       tf.summary.audio('x_wave', x_wave[:, :, 0, 0], self.audio_fs)
       tf.summary.audio('x_vocoded', vocoded_wave[:, :, 0, 0], self.audio_fs)
@@ -175,6 +244,9 @@ class WavenetVocoder(AudioModel):
 
   def train_loop(self, sess):
     run_options = tf.RunOptions(report_tensor_allocations_upon_oom=True)
+    if self.train_gan:
+      for i in range(self.train_gan_num_disc_updates):
+        sess.run(self.D_train_op, options=run_options)
     sess.run(self.train_op, options=run_options)
 
 
