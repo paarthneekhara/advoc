@@ -4,3 +4,4 @@ debug_train.sh
 data_split.py
 *.wav
 OverfitExperiments/*
+small_valid.py

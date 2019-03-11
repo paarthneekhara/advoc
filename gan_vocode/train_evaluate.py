@@ -120,8 +120,10 @@ def eval(fps, args):
 
   G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
   gan_step = tf.train.get_or_create_global_step()
-  gan_saver = tf.train.Saver(var_list=G_vars + [gan_step], max_to_keep=2)
-
+  
+  gan_saver = tf.train.Saver(var_list=G_vars + [gan_step], max_to_keep=1)
+  gan_saver2 = tf.train.Saver(var_list=G_vars + [gan_step], max_to_keep=1)
+  gan_saver3 = tf.train.Saver(var_list=G_vars + [gan_step], max_to_keep=1)
   
   all_wav_l1 = tf.placeholder(tf.float32, [None])
   all_wav_l2 = tf.placeholder(tf.float32, [None])
@@ -153,6 +155,7 @@ def eval(fps, args):
 
       with tf.Session() as sess:
         gan_saver.restore(sess, latest_ckpt_fp)
+
         _step = sess.run(gan_step)
 
         _all_G_z_slices = []
@@ -218,12 +221,12 @@ def eval(fps, args):
           print("Saved best wavenet NLL!")
         
         if _all_wav_l1_np < _best_wav_l1:
-          gan_saver.save(sess, os.path.join(eval_dir, 'best_wav_l1'), _step)
+          gan_saver2.save(sess, os.path.join(eval_dir, 'best_wav_l1'), _step)
           _best_wav_l1 = _all_wav_l1_np
           print("Saved best wav l1!")
 
         if _all_spec_l2_np < _best_spec_l2:
-          gan_saver.save(sess, os.path.join(eval_dir, 'best_spec_l2'), _step)
+          gan_saver3.save(sess, os.path.join(eval_dir, 'best_spec_l2'), _step)
           _best_spec_l2 = _all_spec_l2_np
           print("Saved best spec l2!")
 
