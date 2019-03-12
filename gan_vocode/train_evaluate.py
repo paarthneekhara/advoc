@@ -273,7 +273,7 @@ def infer(fps, args):
       subseq_overlap_ratio=0.,
       subseq_pad_end=True,
       prefetch_size=None,
-      gpu_num=None)
+      prefetch_gpu_num=0)
 
   # Create GAN generation graph
   x_spec_sliced = tf.reshape(x_spec, [8, model.subseq_len, x_spec.shape[2], 1 ])
