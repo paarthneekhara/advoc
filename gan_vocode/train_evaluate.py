@@ -2,12 +2,18 @@ import tensorflow as tf
 from advoc.loader import decode_extract_and_batch
 from model import Modes
 from util import override_model_attrs
-from vocoderGANPatches import VocoderGAN
 import numpy as np
 import time
 
 def train(fps, args):
   # Initialize model
+  if args.vocoder_model == 'regular':
+    from vocoderGANPatches import VocoderGAN    
+  elif args.vocoder_model == 'stride2':
+    from vocoderGANStride2 import VocoderGAN
+  else:
+    raise NotImplementedError()
+
   model = VocoderGAN(Modes.TRAIN)
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
@@ -48,6 +54,13 @@ def train(fps, args):
       model.train_loop(sess)
 
 def eval(fps, args):
+  if args.vocoder_model == 'regular':
+    from vocoderGANPatches import VocoderGAN    
+  elif args.vocoder_model == 'stride2':
+    from vocoderGANStride2 import VocoderGAN
+  else:
+    raise NotImplementedError()
+
   if args.eval_dataset_name is not None:
     eval_dir = os.path.join(args.train_dir,
         'eval_{}'.format(args.eval_dataset_name))
@@ -238,6 +251,13 @@ def eval(fps, args):
 
 
 def infer(fps, args):
+  if args.vocoder_model == 'regular':
+    from vocoderGANPatches import VocoderGAN    
+  elif args.vocoder_model == 'stride2':
+    from vocoderGANStride2 import VocoderGAN
+  else:
+    raise NotImplementedError()
+
   if args.infer_dataset_name is not None:
     infer_dir = os.path.join(args.train_dir,
         'infer_{}'.format(args.eval_dataset_name))
@@ -257,7 +277,7 @@ def infer(fps, args):
   with tf.name_scope('loader'):
     x_spec, x_wav = decode_extract_and_batch(
       fps,
-      batch_size=1,
+      batch_size=args.infer_batch_size,
       subseq_len= model.subseq_len * 8, #8 seconds
       audio_fs=model.audio_fs,
       audio_mono=True,
@@ -287,8 +307,8 @@ def infer(fps, args):
   G_z_tiled = tf.reshape(G_z, x_wav.shape)
   G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
   step = tf.train.get_or_create_global_step()
-  step_op = tf.assign(step, step+1)
-  gan_saver = tf.train.Saver(var_list=G_vars, max_to_keep=1)
+  # step_op = tf.assign(step, step+1)
+  gan_saver = tf.train.Saver(var_list=G_vars + [step], max_to_keep=1)
 
   summaries = [
     tf.summary.audio('infer_x_wav', x_wav[:, :, 0, :], model.audio_fs),
@@ -300,21 +320,44 @@ def infer(fps, args):
   summary_writer = tf.summary.FileWriter(infer_dir)
 
   
-    
-  ckpt_fp = args.infer_ckpt_path
-  print('Infereing From {}'.format(ckpt_fp))
+  
+  if args.infer_ckpt_path is not None:
+    # Infering From a particular Checkpoint
+    ckpt_fp = args.infer_ckpt_path
+    print('Infereing From {}'.format(ckpt_fp))
 
-  with tf.Session() as sess:
-    gan_saver.restore(sess, ckpt_fp)
-    sess.run(step.initializer)
-    # _step = sess.run(gan_step)
+    with tf.Session() as sess:
+      gan_saver.restore(sess, ckpt_fp)
+      _step = sess.run(step)
+      # Just one batch at a time
+      while True:
+        try:
+          _summaries= sess.run(summaries)
+          summary_writer.add_summary(_summaries, _step)
+        except tf.errors.OutOfRangeError:
+          break
+      print('Done!')
+
+  else:
+    # Continuous Inference
+    ckpt_fp = None
     while True:
-      try:
-        _summaries, _step, _ = sess.run([summaries, step, step_op])
-        summary_writer.add_summary(_summaries, _step)
-      except tf.errors.OutOfRangeError:
-        break
-    print('Done!')
+      with tf.Session() as sess:
+        latest_ckpt_fp = tf.train.latest_checkpoint(args.train_dir)
+        if latest_ckpt_fp != ckpt_fp:
+          ckpt_fp = latest_ckpt_fp
+          gan_saver.restore(sess, ckpt_fp)
+          _step = sess.run(step)
+          
+          while True:
+            try:
+              _summaries= sess.run(summaries)
+              summary_writer.add_summary(_summaries, _step)
+            except tf.errors.OutOfRangeError:
+              break
+          print("Done!")
+        time.sleep(1)
+
     
 
 if __name__ == '__main__':
@@ -328,10 +371,12 @@ if __name__ == '__main__':
   parser.add_argument('train_dir', type=str)
 
   parser.add_argument('--data_dir', type=str, required=True)
+  parser.add_argument('--vocoder_model', type=str, choices=['regular', 'stride2'])
   parser.add_argument('--data_fastwav', dest='data_fastwav', action='store_true')
   parser.add_argument('--data_overlap_ratio', type=float)
   parser.add_argument('--model_overrides', type=str)
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
+  parser.add_argument('--infer_batch_size', type=int)
   parser.add_argument('--train_summary_every_nsecs', type=int)
   parser.add_argument('--eval_dataset_name', type=str)
   parser.add_argument('--eval_wavenet_meta_fp', type=str)
@@ -348,6 +393,7 @@ if __name__ == '__main__':
       model_overrides=None,
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60,
+      infer_batch_size=1,
       eval_dataset_name=None,
       eval_wavenet_meta_fp=None,
       eval_wavenet_ckpt_fp=None,
