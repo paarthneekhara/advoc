@@ -100,7 +100,7 @@ def eval(fps, args):
 
   # Create GAN generation graph
   z = tf.random.normal([model.eval_batch_size, 1, 1, model.zdim], dtype=tf.float32)
-  z_tiled = z * tf.constant(1.0, shape=[model.eval_batch_size, 64, 1, model.zdim])
+  z_tiled = z * tf.constant(1.0, shape=[model.eval_batch_size, model.subseq_len, 1, model.zdim])
   
   # Generator
   with tf.variable_scope('G') as vs:
