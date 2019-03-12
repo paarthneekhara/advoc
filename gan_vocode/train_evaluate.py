@@ -260,7 +260,7 @@ def infer(fps, args):
 
   if args.infer_dataset_name is not None:
     infer_dir = os.path.join(args.train_dir,
-        'infer_{}'.format(args.eval_dataset_name))
+        'infer_{}'.format(args.infer_dataset_name))
   else:
     infer_dir = os.path.join(args.train_dir, 'infer_valid')
   if not os.path.isdir(infer_dir):
@@ -346,6 +346,7 @@ def infer(fps, args):
         latest_ckpt_fp = tf.train.latest_checkpoint(args.train_dir)
         if latest_ckpt_fp != ckpt_fp:
           ckpt_fp = latest_ckpt_fp
+          print('Infereing From {}'.format(ckpt_fp))
           gan_saver.restore(sess, ckpt_fp)
           _step = sess.run(step)
           
