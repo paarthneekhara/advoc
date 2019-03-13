@@ -15,12 +15,15 @@ _NAMED_MODELS = {
 }
 
 def train(fps, args):
+  if not os.path.isdir(args.train_dir):
+    os.makedirs(args.train_dir)
+
   # Initialize model
   model = _NAMED_MODELS[args.model](Modes.TRAIN)
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
   print(summary)
-  with open(os.path.join(args.train_dir, 'args.txt')) as f:
+  with open(os.path.join(args.train_dir, 'args.txt'), 'w') as f:
     f.write(summary)
   print('-' * 80)
 
