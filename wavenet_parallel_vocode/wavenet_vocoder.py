@@ -33,12 +33,13 @@ class WavenetVocoder(AudioModel):
   input_type = 'gaussian_spec' #'gaussian_spec', 'uniform_spec', 'spec_none', 'spec_spec'
 
   # Training
-  train_recon_domain = 'spec' #'spec' # wave, spec
+  train_recon_domain = 'magspec' #'spec' # wave, spec, magspec
   train_recon_norm = 'l2' #'l2' # l1, l2
   train_recon_multiplier = 1.
   train_gan = False
-  train_gan_objective = 'dcgan'
+  train_gan_objective = 'wgangp'
   train_gan_multiplier = 1.
+  train_wgangp_lambda = 10
   train_batch_size = 32
   train_lr = 2e-4
 
@@ -114,12 +115,19 @@ class WavenetVocoder(AudioModel):
       num_params += np.prod(v.shape.as_list())
     print('Model size: {:.4f} GB'.format(float(num_params) * 4 / 1024 / 1024 / 1024))
 
+    # TODO: remove stop gradient on these?
+    x_wave_spec = tf.stop_gradient(advoc.spectral.waveform_to_r9y9_melspec_tf(x_wave, fs=self.audio_fs))
     vocoded_wave_spec = advoc.spectral.waveform_to_r9y9_melspec_tf(vocoded_wave, fs=self.audio_fs)
+
+    x_wave_magspec = tf.stop_gradient(tf.abs(tf.contrib.signal.stft(x_wave[:, :, 0, 0], 1024, 256, pad_end=True)))
+    vocoded_wave_magspec = tf.abs(tf.contrib.signal.stft(vocoded_wave[:, :, 0, 0], 1024, 256, pad_end=True))
 
     self.wav_l1 = wav_l1 = tf.reduce_mean(tf.abs(vocoded_wave - x_wave))
     self.wav_l2 = wav_l2 = tf.reduce_mean(tf.square(vocoded_wave - x_wave))
-    self.spec_l1 = spec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_spec - x_spec))
-    self.spec_l2 = spec_l2 = tf.reduce_mean(tf.square(vocoded_wave_spec - x_spec))
+    self.spec_l1 = spec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_spec - x_wave_spec))
+    self.spec_l2 = spec_l2 = tf.reduce_mean(tf.square(vocoded_wave_spec - x_wave_spec))
+    self.magspec_l1 = magspec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_magspec - x_wave_magspec))
+    self.magspec_l2 = magspec_l2 = tf.reduce_mean(tf.square(vocoded_wave_magspec - x_wave_magspec))
 
     if self.mode == Modes.TRAIN:
       if self.train_recon_domain == 'wave' and self.train_recon_norm == 'l1':
@@ -130,11 +138,15 @@ class WavenetVocoder(AudioModel):
         loss = self.train_recon_multiplier * spec_l1
       elif self.train_recon_domain == 'spec' and self.train_recon_norm == 'l2':
         loss = self.train_recon_multiplier * spec_l2
+      elif self.train_recon_domain == 'magspec' and self.train_recon_norm == 'l1':
+        loss = self.train_recon_multiplier * magspec_l1
+      elif self.train_recon_domain == 'magspec' and self.train_recon_norm == 'l2':
+        loss = self.train_recon_multiplier * magspec_l2
       else:
         raise ValueError()
 
       if self.train_gan:
-        with tf.variable_scope('discriminator'):
+        with tf.name_scope('D_x'), tf.variable_scope('discriminator'):
           # TODO: get spec into encoder somehow
           D_x = build_nsynth_wavenet_encoder(
               x_wave[:, :, 0, :],
@@ -147,7 +159,7 @@ class WavenetVocoder(AudioModel):
         D_vars = tf.trainable_variables(scope='discriminator')
         assert len(D_vars) == len(tf.global_variables('discriminator'))
 
-        with tf.variable_scope('discriminator', reuse=True):
+        with tf.name_scope('D_G_z'), tf.variable_scope('discriminator', reuse=True):
           D_G_z = build_nsynth_wavenet_encoder(
               vocoded_wave[:, :, 0, :],
               num_stages=self.ae_num_stages,
@@ -178,6 +190,29 @@ class WavenetVocoder(AudioModel):
           D_loss /= 2.
 
           self.train_gan_num_disc_updates = 1
+        elif self.train_gan_objective == 'wgangp':
+          G_loss = -tf.reduce_mean(D_G_z)
+          D_loss = tf.reduce_mean(D_G_z) - tf.reduce_mean(D_x)
+
+          alpha = tf.random_uniform(shape=[batch_size, 1, 1, 1], minval=0., maxval=1.)
+          differences = vocoded_wave - x_wave
+          interpolates = x_wave + (alpha * differences)
+          with tf.name_scope('D_G_z'), tf.variable_scope('discriminator', reuse=True):
+            D_interp = build_nsynth_wavenet_encoder(
+                interpolates[:, :, 0, :],
+                num_stages=self.ae_num_stages,
+                num_layers=self.ae_num_layers,
+                filter_length=self.ae_filter_length,
+                width=self.ae_width,
+                hop_length=self.ae_hop_length,
+                bottleneck_width=1)
+
+          gradients = tf.gradients(D_interp, [interpolates])[0]
+          slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2, 3]))
+          gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
+          D_loss += self.train_wgangp_lambda * gradient_penalty
+
+          self.train_gan_num_disc_updates = 5
         else:
           raise ValueError()
 
@@ -193,13 +228,15 @@ class WavenetVocoder(AudioModel):
 
       tf.summary.audio('x_wave', x_wave[:, :, 0, 0], self.audio_fs)
       tf.summary.audio('x_vocoded', vocoded_wave[:, :, 0, 0], self.audio_fs)
-      tf.summary.image('x_spec', advoc.util.r9y9_melspec_to_uint8_img(x_spec))
+      tf.summary.image('x_spec', advoc.util.r9y9_melspec_to_uint8_img(x_wave_spec))
       tf.summary.image('x_vocoded_spec', advoc.util.r9y9_melspec_to_uint8_img(vocoded_wave_spec))
       tf.summary.scalar('loss', loss)
       tf.summary.scalar('wav_l1', wav_l1)
       tf.summary.scalar('wav_l2', wav_l2)
       tf.summary.scalar('spec_l1', spec_l1)
       tf.summary.scalar('spec_l2', spec_l2)
+      tf.summary.scalar('magspec_l1', magspec_l1)
+      tf.summary.scalar('magspec_l2', magspec_l2)
 
       opt = tf.train.AdamOptimizer(learning_rate=self.train_lr)
 

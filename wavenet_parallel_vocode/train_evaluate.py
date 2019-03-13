@@ -20,6 +20,8 @@ def train(fps, args):
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
   print(summary)
+  with open(os.path.join(args.train_dir, 'args.txt')) as f:
+    f.write(summary)
   print('-' * 80)
 
   # Load data
