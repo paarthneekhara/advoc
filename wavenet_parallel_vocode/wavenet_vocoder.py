@@ -16,11 +16,11 @@ class WavenetVocoder(AudioModel):
 
   # NSynth decoder params
   num_stages = 10
-  num_layers = 30
+  num_layers = 20 # originally 30
   filter_length = 3
-  width = 256
+  width = 128 # originally 256
   skip_width = 128
-  causal = True
+  causal = False # originally True
 
   # NSynth encoder params
   ae_num_stages = 10
@@ -31,9 +31,10 @@ class WavenetVocoder(AudioModel):
 
   # Other model params
   input_type = 'gaussian_spec' #'gaussian_spec', 'uniform_spec', 'spec_none', 'spec_spec'
+  input_spec_upsample = 'default' #'lin', 'learned'
 
   # Training
-  train_recon_domain = 'magspec' #'spec' # wave, spec, magspec
+  train_recon_domain = 'r9y9_recomp' # wave, r9y9, linmagspec, logmagspec
   train_recon_norm = 'l2' #'l2' # l1, l2
   train_recon_multiplier = 1.
   train_gan = False
