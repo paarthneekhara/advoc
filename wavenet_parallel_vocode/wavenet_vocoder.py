@@ -73,16 +73,16 @@ class WavenetVocoder(AudioModel):
     elif self.input_spec_upsample == 'nearest_neighbor':
       x_r9y9_up = tf.stop_gradient(tf.image.resize_nearest_neighbor(
           x_r9y9,
-          [self.subseq_n_samps, nmels]))
+          [self.subseq_nsamps, nmels]))
     elif self.input_spec_upsample == 'linear':
       x_r9y9_up = tf.stop_gradient(tf.image.resize_bilinear(
           x_r9y9,
-          [self.subseq_n_samps, nmels]))
+          [self.subseq_nsamps, nmels]))
     elif self.input_spec_upsample == 'learned':
       x_r9y9_up = x_r9y9
       with tf.variable_scope('vocoder'):
-        while int(x_r9y9_up.get_shape()[1]) != self.subseq_n_samps:
-          if int(x_r9y9_up.get_shape()[1]) > self.subseq_n_samps:
+        while int(x_r9y9_up.get_shape()[1]) != self.subseq_nsamps:
+          if int(x_r9y9_up.get_shape()[1]) > self.subseq_nsamps:
             raise ValueError()
           x_r9y9_up = tf.layers.conv2d_transpose(
               x_r9y9_up,
@@ -118,7 +118,7 @@ class WavenetVocoder(AudioModel):
     with tf.variable_scope('vocoder'):
       self.vocoded_wave = vocoded_wave = build_nsynth_wavenet_decoder(
           input_wave[:, :, 0, :],
-          input_cond[:, :, :, 0],
+          input_cond[:, :, :, 0] if input_cond is not None else input_cond,
           causal=self.causal,
           output_width=1,
           num_stages=self.num_stages,
@@ -162,18 +162,22 @@ class WavenetVocoder(AudioModel):
         loss = self.train_recon_multiplier * wav_l1
       elif self.train_recon_domain == 'wave' and self.train_recon_norm == 'l2':
         loss = self.train_recon_multiplier * wav_l2
-      elif self.train_recon_domain == 'r9y9' and self.train_recon_norm == 'l1':
-        loss = self.train_recon_multiplier * r9y9_l1
-      elif self.train_recon_domain == 'r9y9' and self.train_recon_norm == 'l2':
-        loss = self.train_recon_multiplier * r9y9_l2
       elif self.train_recon_domain == 'r9y9_legacy' and self.train_recon_norm == 'l1':
         loss = self.train_recon_multiplier * r9y9_legacy_l1
       elif self.train_recon_domain == 'r9y9_legacy' and self.train_recon_norm == 'l2':
         loss = self.train_recon_multiplier * r9y9_legacy_l2
-      elif self.train_recon_domain == 'magspec' and self.train_recon_norm == 'l1':
-        loss = self.train_recon_multiplier * magspec_l1
-      elif self.train_recon_domain == 'magspec' and self.train_recon_norm == 'l2':
-        loss = self.train_recon_multiplier * magspec_l2
+      elif self.train_recon_domain == 'r9y9' and self.train_recon_norm == 'l1':
+        loss = self.train_recon_multiplier * r9y9_l1
+      elif self.train_recon_domain == 'r9y9' and self.train_recon_norm == 'l2':
+        loss = self.train_recon_multiplier * r9y9_l2
+      elif self.train_recon_domain == 'linmagspec' and self.train_recon_norm == 'l1':
+        loss = self.train_recon_multiplier * linmagspec_l1
+      elif self.train_recon_domain == 'linmagspec' and self.train_recon_norm == 'l2':
+        loss = self.train_recon_multiplier * linmagspec_l2
+      elif self.train_recon_domain == 'logmagspec' and self.train_recon_norm == 'l1':
+        loss = self.train_recon_multiplier * logmagspec_l1
+      elif self.train_recon_domain == 'logmagspec' and self.train_recon_norm == 'l2':
+        loss = self.train_recon_multiplier * logmagspec_l2
       else:
         raise ValueError()
 
