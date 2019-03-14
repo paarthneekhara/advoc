@@ -34,7 +34,7 @@ class WavenetVocoder(AudioModel):
   input_spec_upsample = 'default' #'lin', 'learned'
 
   # Training
-  train_recon_domain = 'r9y9_recomp' # wave, r9y9, linmagspec, logmagspec
+  train_recon_domain = 'r9y9_legacy' # wave, r9y9, linmagspec, logmagspec
   train_recon_norm = 'l2' #'l2' # l1, l2
   train_recon_multiplier = 1.
   train_gan = False
@@ -64,42 +64,61 @@ class WavenetVocoder(AudioModel):
     return self.global_vars
 
 
-  def __call__(self, x_spec, x_wave):
-    batch_size, _, nmels, _ = advoc.util.best_shape(x_spec)
+  def __call__(self, x_r9y9, x_wave):
+    batch_size, _, nmels, _ = advoc.util.best_shape(x_r9y9)
 
+    # Optionally upsample r9y9trogram
+    if self.input_spec_upsample == 'default':
+      x_r9y9_up = x_r9y9
+    elif self.input_spec_upsample == 'nearest_neighbor':
+      x_r9y9_up = tf.stop_gradient(tf.image.resize_nearest_neighbor(
+          x_r9y9,
+          [self.subseq_n_samps, nmels]))
+    elif self.input_spec_upsample == 'linear':
+      x_r9y9_up = tf.stop_gradient(tf.image.resize_bilinear(
+          x_r9y9,
+          [self.subseq_n_samps, nmels]))
+    elif self.input_spec_upsample == 'learned':
+      x_r9y9_up = x_r9y9
+      with tf.variable_scope('vocoder'):
+        while int(x_r9y9_up.get_shape()[1]) != self.subseq_n_samps:
+          if int(x_r9y9_up.get_shape()[1]) > self.subseq_n_samps:
+            raise ValueError()
+          x_r9y9_up = tf.layers.conv2d_transpose(
+              x_r9y9_up,
+              nmels,
+              (9, 1),
+              strides=(4, 1),
+              padding='same')
+          x_r9y9_up = tf.nn.relu(x_r9y9_up)
+    else:
+      raise ValueError()
+
+    # Create input structure
+    # First part (e.g. uniform) represents waveform-rate input to WaveNet.
+    # Second part (e.g. r9y9) represents r9y9-rate conditioning info (number of timesteps must perfectly divide number of audio samples)
     if self.input_type == 'uniform_spec':
-      input_wave = tf.random.uniform([batch_size, self.subseq_nsamps, 1], minval=-1, maxval=1, dtype=tf.float32)
-      input_spec = x_spec[:, :, :, 0]
+      input_wave = tf.random.uniform([batch_size, self.subseq_nsamps, 1, 1], minval=-1, maxval=1, dtype=tf.float32)
+      input_cond = x_r9y9_up
     elif self.input_type == 'gaussian_spec':
-      input_wave = tf.random.normal([batch_size, self.subseq_nsamps, 1], dtype=tf.float32)
-      input_spec = x_spec[:, :, :, 0]
+      input_wave = tf.random.normal([batch_size, self.subseq_nsamps, 1, 1], dtype=tf.float32)
+      input_cond = x_r9y9_up
     elif self.input_type == 'spec_none':
-      input_wave = x_spec[:, :, :, 0]
-
-      # Upsample [32, 24, 80] to [32, 6144, 80]
-      input_wave = input_wave[:, :, tf.newaxis, :]
-      compression = self.subseq_nsamps // self.subseq_len
-      input_wave = tf.tile(input_wave, [1, 1, compression, 1])
-      input_wave = tf.reshape(input_wave, [batch_size, -1, nmels])
-
-      input_spec = None
+      input_wave = x_r9y9_up
+      input_cond = None
     elif self.input_type == 'spec_spec':
-      input_wave = x_spec[:, :, :, 0]
-
-      # Upsample [32, 24, 80] to [32, 6144, 80]
-      input_wave = input_wave[:, :, tf.newaxis, :]
-      compression = self.subseq_nsamps // self.subseq_len
-      input_wave = tf.tile(input_wave, [1, 1, compression, 1])
-      input_wave = tf.reshape(input_wave, [batch_size, -1, nmels])
-
-      input_spec = x_spec[:, :, :, 0]
+      input_wave = x_r9y9_up
+      input_cond = x_r9y9_up
+    elif self.input_type == 'spec_lospec':
+      input_wave = x_r9y9_up
+      input_cond = x_r9y9
     else:
       raise ValueError()
 
     with tf.variable_scope('vocoder'):
       self.vocoded_wave = vocoded_wave = build_nsynth_wavenet_decoder(
-          input_wave,
-          input_spec,
+          input_wave[:, :, 0, :],
+          input_cond[:, :, :, 0],
           causal=self.causal,
           output_width=1,
           num_stages=self.num_stages,
@@ -117,28 +136,40 @@ class WavenetVocoder(AudioModel):
     print('Model size: {:.4f} GB'.format(float(num_params) * 4 / 1024 / 1024 / 1024))
 
     # TODO: remove stop gradient on these?
-    x_wave_spec = tf.stop_gradient(advoc.spectral.waveform_to_r9y9_melspec_tf(x_wave, fs=self.audio_fs))
-    vocoded_wave_spec = advoc.spectral.waveform_to_r9y9_melspec_tf(vocoded_wave, fs=self.audio_fs)
+    x_wave_r9y9 = tf.stop_gradient(advoc.spectral.waveform_to_r9y9_melspec_tf(x_wave, fs=self.audio_fs))
+    vocoded_wave_r9y9 = advoc.spectral.waveform_to_r9y9_melspec_tf(vocoded_wave, fs=self.audio_fs)
 
-    x_wave_magspec = tf.stop_gradient(tf.abs(tf.contrib.signal.stft(x_wave[:, :, 0, 0], 1024, 256, pad_end=True)))
-    vocoded_wave_magspec = tf.abs(tf.contrib.signal.stft(vocoded_wave[:, :, 0, 0], 1024, 256, pad_end=True))
+    # TODO: Reshape these to proper chris-like spectrogram
+    x_wave_linmagspec = tf.stop_gradient(tf.abs(tf.contrib.signal.stft(x_wave[:, :, 0, 0], 1024, 256, pad_end=True)))
+    vocoded_wave_linmagspec = tf.abs(tf.contrib.signal.stft(vocoded_wave[:, :, 0, 0], 1024, 256, pad_end=True))
+
+    x_wave_logmagspec = tf.stop_gradient(tf.log(x_wave_linmagspec + 1e-10))
+    vocoded_wave_logmagspec = tf.log(vocoded_wave_linmagspec + 1e-10)
 
     self.wav_l1 = wav_l1 = tf.reduce_mean(tf.abs(vocoded_wave - x_wave))
     self.wav_l2 = wav_l2 = tf.reduce_mean(tf.square(vocoded_wave - x_wave))
-    self.spec_l1 = spec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_spec - x_wave_spec))
-    self.spec_l2 = spec_l2 = tf.reduce_mean(tf.square(vocoded_wave_spec - x_wave_spec))
-    self.magspec_l1 = magspec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_magspec - x_wave_magspec))
-    self.magspec_l2 = magspec_l2 = tf.reduce_mean(tf.square(vocoded_wave_magspec - x_wave_magspec))
+    self.r9y9_legacy_l1 = r9y9_legacy_l1 = tf.reduce_mean(tf.abs(vocoded_wave_r9y9 - x_r9y9))
+    self.r9y9_legacy_l2 = r9y9_legacy_l2 = tf.reduce_mean(tf.square(vocoded_wave_r9y9 - x_r9y9))
+    self.r9y9_l1 = r9y9_l1 = tf.reduce_mean(tf.abs(vocoded_wave_r9y9 - x_wave_r9y9))
+    self.r9y9_l2 = r9y9_l2 = tf.reduce_mean(tf.square(vocoded_wave_r9y9 - x_wave_r9y9))
+    self.linmagspec_l1 = linmagspec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_linmagspec - x_wave_linmagspec))
+    self.linmagspec_l2 = linmagspec_l2 = tf.reduce_mean(tf.square(vocoded_wave_linmagspec - x_wave_linmagspec))
+    self.logmagspec_l1 = logmagspec_l1 = tf.reduce_mean(tf.abs(vocoded_wave_logmagspec - x_wave_logmagspec))
+    self.logmagspec_l2 = logmagspec_l2 = tf.reduce_mean(tf.square(vocoded_wave_logmagspec - x_wave_logmagspec))
 
     if self.mode == Modes.TRAIN:
       if self.train_recon_domain == 'wave' and self.train_recon_norm == 'l1':
         loss = self.train_recon_multiplier * wav_l1
       elif self.train_recon_domain == 'wave' and self.train_recon_norm == 'l2':
         loss = self.train_recon_multiplier * wav_l2
-      elif self.train_recon_domain == 'spec' and self.train_recon_norm == 'l1':
-        loss = self.train_recon_multiplier * spec_l1
-      elif self.train_recon_domain == 'spec' and self.train_recon_norm == 'l2':
-        loss = self.train_recon_multiplier * spec_l2
+      elif self.train_recon_domain == 'r9y9' and self.train_recon_norm == 'l1':
+        loss = self.train_recon_multiplier * r9y9_l1
+      elif self.train_recon_domain == 'r9y9' and self.train_recon_norm == 'l2':
+        loss = self.train_recon_multiplier * r9y9_l2
+      elif self.train_recon_domain == 'r9y9_legacy' and self.train_recon_norm == 'l1':
+        loss = self.train_recon_multiplier * r9y9_legacy_l1
+      elif self.train_recon_domain == 'r9y9_legacy' and self.train_recon_norm == 'l2':
+        loss = self.train_recon_multiplier * r9y9_legacy_l2
       elif self.train_recon_domain == 'magspec' and self.train_recon_norm == 'l1':
         loss = self.train_recon_multiplier * magspec_l1
       elif self.train_recon_domain == 'magspec' and self.train_recon_norm == 'l2':
@@ -227,17 +258,27 @@ class WavenetVocoder(AudioModel):
         tf.summary.scalar('D_loss', D_loss)
         tf.summary.scalar('G_loss', G_loss)
 
+      x_r9y9_up_preview = tf.image.resize_nearest_neighbor(
+          x_r9y9_up,
+          [self.subseq_len * 8, nmels])
+
+      tf.summary.image('x_r9y9', advoc.util.r9y9_melspec_to_uint8_img(x_r9y9))
+      tf.summary.image('x_r9y9_up', advoc.util.r9y9_melspec_to_uint8_img(x_r9y9_up_preview))
       tf.summary.audio('x_wave', x_wave[:, :, 0, 0], self.audio_fs)
+      tf.summary.image('x_wave_r9y9', advoc.util.r9y9_melspec_to_uint8_img(x_wave_r9y9))
       tf.summary.audio('x_vocoded', vocoded_wave[:, :, 0, 0], self.audio_fs)
-      tf.summary.image('x_spec', advoc.util.r9y9_melspec_to_uint8_img(x_wave_spec))
-      tf.summary.image('x_vocoded_spec', advoc.util.r9y9_melspec_to_uint8_img(vocoded_wave_spec))
+      tf.summary.image('x_vocoded_r9y9', advoc.util.r9y9_melspec_to_uint8_img(vocoded_wave_r9y9))
       tf.summary.scalar('loss', loss)
       tf.summary.scalar('wav_l1', wav_l1)
       tf.summary.scalar('wav_l2', wav_l2)
-      tf.summary.scalar('spec_l1', spec_l1)
-      tf.summary.scalar('spec_l2', spec_l2)
-      tf.summary.scalar('magspec_l1', magspec_l1)
-      tf.summary.scalar('magspec_l2', magspec_l2)
+      tf.summary.scalar('r9y9_legacy_l1', r9y9_legacy_l1)
+      tf.summary.scalar('r9y9_legacy_l2', r9y9_legacy_l2)
+      tf.summary.scalar('r9y9_l1', r9y9_l1)
+      tf.summary.scalar('r9y9_l2', r9y9_l2)
+      tf.summary.scalar('linmagspec_l1', linmagspec_l1)
+      tf.summary.scalar('linmagspec_l2', linmagspec_l2)
+      tf.summary.scalar('logmagspec_l1', logmagspec_l1)
+      tf.summary.scalar('logmagspec_l2', logmagspec_l2)
 
       opt = tf.train.AdamOptimizer(learning_rate=self.train_lr)
 
@@ -261,8 +302,14 @@ class WavenetVocoder(AudioModel):
       self.all_nll = tf.placeholder(tf.float32, [None])
       self.all_wav_l1 = tf.placeholder(tf.float32, [None])
       self.all_wav_l2 = tf.placeholder(tf.float32, [None])
-      self.all_spec_l1 = tf.placeholder(tf.float32, [None])
-      self.all_spec_l2 = tf.placeholder(tf.float32, [None])
+      self.all_r9y9_legacy_l1 = tf.placeholder(tf.float32, [None])
+      self.all_r9y9_legacy_l2 = tf.placeholder(tf.float32, [None])
+      self.all_r9y9_l1 = tf.placeholder(tf.float32, [None])
+      self.all_r9y9_l2 = tf.placeholder(tf.float32, [None])
+      self.all_linmagspec_l1 = tf.placeholder(tf.float32, [None])
+      self.all_linmagspec_l2 = tf.placeholder(tf.float32, [None])
+      self.all_logmagspec_l1 = tf.placeholder(tf.float32, [None])
+      self.all_logmagspec_l2 = tf.placeholder(tf.float32, [None])
 
       avg_nll = tf.reduce_mean(self.all_nll)
       summaries = [
@@ -270,14 +317,21 @@ class WavenetVocoder(AudioModel):
           tf.summary.scalar('ppl', tf.exp(avg_nll)),
           tf.summary.scalar('wav_l1', tf.reduce_mean(self.all_wav_l1)),
           tf.summary.scalar('wav_l2', tf.reduce_mean(self.all_wav_l2)),
-          tf.summary.scalar('spec_l1', tf.reduce_mean(self.all_spec_l1)),
-          tf.summary.scalar('spec_l2', tf.reduce_mean(self.all_spec_l2))
+          tf.summary.scalar('r9y9_legacy_l1', tf.reduce_mean(self.all_r9y9_legacy_l1)),
+          tf.summary.scalar('r9y9_legacy_l2', tf.reduce_mean(self.all_r9y9_legacy_l2)),
+          tf.summary.scalar('r9y9_l1', tf.reduce_mean(self.all_r9y9_l1)),
+          tf.summary.scalar('r9y9_l2', tf.reduce_mean(self.all_r9y9_l2)),
+          tf.summary.scalar('linmagspec_l1', tf.reduce_mean(self.all_linmagspec_l1)),
+          tf.summary.scalar('linmagspec_l2', tf.reduce_mean(self.all_linmagspec_l2)),
+          tf.summary.scalar('logmagspec_l1', tf.reduce_mean(self.all_logmagspec_l1)),
+          tf.summary.scalar('logmagspec_l2', tf.reduce_mean(self.all_logmagspec_l2)),
       ]
       self.summaries = tf.summary.merge(summaries)
 
       self.best_nll = None
       self.best_wav_l1 = None
-      self.best_spec_l2 = None
+      self.best_r9y9_l2 = None
+      self.best_linmagspec_l2 = None
 
 
   def train_loop(self, sess):
@@ -295,16 +349,28 @@ class WavenetVocoder(AudioModel):
     _all_nll = []
     _all_wav_l1 = []
     _all_wav_l2 = []
-    _all_spec_l1 = []
-    _all_spec_l2 = []
+    _all_r9y9_legacy_l1 = []
+    _all_r9y9_legacy_l2 = []
+    _all_r9y9_l1 = []
+    _all_r9y9_l2 = []
+    _all_linmagspec_l1 = []
+    _all_linmagspec_l2 = []
+    _all_logmagspec_l1 = []
+    _all_logmagspec_l2 = []
     for i in range(self.eval_batch_num):
       try:
-        _vocoded_wave, _wav_l1, _wav_l2, _spec_l1, _spec_l2 = sess.run([
+        _vocoded_wave, _wav_l1, _wav_l2, _r9y9_legacy_l1, _r9y9_legacy_l2, _r9y9_l1, _r9y9_l2, _linmagspec_l1, _linmagspec_l2, _logmagspec_l1, _logmagspec_l2 = sess.run([
           self.vocoded_wave,
           self.wav_l1,
           self.wav_l2,
-          self.spec_l1,
-          self.spec_l2
+          self.r9y9_legacy_l1,
+          self.r9y9_legacy_l2,
+          self.r9y9_l1,
+          self.r9y9_l2,
+          self.linmagspec_l1,
+          self.linmagspec_l2,
+          self.logmagspec_l1,
+          self.logmagspec_l2
         ])
       except tf.errors.OutOfRangeError:
         break
@@ -315,8 +381,14 @@ class WavenetVocoder(AudioModel):
 
       _all_wav_l1.append(_wav_l1)
       _all_wav_l2.append(_wav_l2)
-      _all_spec_l1.append(_spec_l1)
-      _all_spec_l2.append(_spec_l2)
+      _all_r9y9_legacy_l1.append(_r9y9_legacy_l1)
+      _all_r9y9_legacy_l2.append(_r9y9_legacy_l2)
+      _all_r9y9_l1.append(_r9y9_l1)
+      _all_r9y9_l2.append(_r9y9_l2)
+      _all_linmagspec_l1.append(_linmagspec_l1)
+      _all_linmagspec_l2.append(_linmagspec_l2)
+      _all_logmagspec_l1.append(_logmagspec_l1)
+      _all_logmagspec_l2.append(_logmagspec_l2)
 
     _all_nll = np.concatenate(_all_nll, axis=0)
 
@@ -324,8 +396,14 @@ class WavenetVocoder(AudioModel):
       self.all_nll: _all_nll,
       self.all_wav_l1: _all_wav_l1,
       self.all_wav_l2: _all_wav_l2,
-      self.all_spec_l1: _all_spec_l1,
-      self.all_spec_l2: _all_spec_l2
+      self.all_r9y9_legacy_l1: _all_r9y9_legacy_l1,
+      self.all_r9y9_legacy_l2: _all_r9y9_legacy_l2,
+      self.all_r9y9_l1: _all_r9y9_l1,
+      self.all_r9y9_l2: _all_r9y9_l2,
+      self.all_linmagspec_l1: _all_linmagspec_l1,
+      self.all_linmagspec_l2: _all_linmagspec_l2,
+      self.all_logmagspec_l1: _all_logmagspec_l1,
+      self.all_logmagspec_l2: _all_logmagspec_l2
     })
 
     best = []
@@ -337,12 +415,17 @@ class WavenetVocoder(AudioModel):
 
     _avg_wav_l1 = np.mean(_all_wav_l1)
     if self.best_wav_l1 is None or _avg_wav_l1 < self.best_wav_l1:
-      best.append('wav_l1')
+      best.append('wav')
       self.best_wav_l1 = _avg_wav_l1
 
-    _avg_spec_l2 = np.mean(_all_spec_l2)
-    if self.best_spec_l2 is None or _avg_spec_l2 < self.best_spec_l2:
-      best.append('spec_l2')
-      self.best_spec_l2 = _avg_spec_l2
+    _avg_r9y9_l2 = np.mean(_all_r9y9_l2)
+    if self.best_r9y9_l2 is None or _avg_r9y9_l2 < self.best_r9y9_l2:
+      best.append('r9y9')
+      self.best_r9y9_l2 = _avg_r9y9_l2
+
+    _avg_linmagspec_l2 = np.mean(_all_linmagspec_l2)
+    if self.best_linmagspec_l2 is None or _avg_linmagspec_l2 < self.best_linmagspec_l2:
+      best.append('linmagspec')
+      self.best_linmagspec_l2 = _avg_linmagspec_l2
 
     return best, _summaries
