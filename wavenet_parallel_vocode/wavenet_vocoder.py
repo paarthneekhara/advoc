@@ -79,7 +79,7 @@ class WavenetVocoder(AudioModel):
           x_r9y9,
           [self.subseq_nsamps, nmels]))
     elif self.input_spec_upsample == 'learned':
-      x_r9y9_up = x_r9y9
+      x_r9y9_up = tf.transpose(x_r9y9, [0, 1, 3, 2])
       with tf.variable_scope('vocoder'):
         while int(x_r9y9_up.get_shape()[1]) != self.subseq_nsamps:
           if int(x_r9y9_up.get_shape()[1]) > self.subseq_nsamps:
@@ -91,6 +91,7 @@ class WavenetVocoder(AudioModel):
               strides=(4, 1),
               padding='same')
           x_r9y9_up = tf.nn.relu(x_r9y9_up)
+      x_r9y9_up = tf.transpose(x_r9y9_up, [0, 1, 3, 2])
     else:
       raise ValueError()
 
