@@ -27,29 +27,41 @@ TRAINDIR_ROOT = '/storage/models'
 DATADIR = '/storage/data/LJSpeech-1.1/wavs_split'
 
 EXP_ALL_HYPER = [
-      ('eval_wavenet_metagraph_fp', '/storage/code/advoc/advoc/wavenet_parallel_vocode/eval/wavenet_auto_small/infer.meta'),
-      ('eval_wavenet_ckpt_fp', '/storage/code/advoc/advoc/wavenet_parallel_vocode/eval/wavenet_auto_small/best-88141'),
-    ]
+    ('train_batch_size', '30'),
+    ('eval_wavenet_metagraph_fp', '/storage/code/advoc/advoc/wavenet_parallel_vocode/eval/wavenet_auto_small/infer.meta'),
+    ('eval_wavenet_ckpt_fp', '/storage/code/advoc/advoc/wavenet_parallel_vocode/eval/wavenet_auto_small/best-88141'),
+]
+
 EXPS = [
-    ("slicecomp", [
+    ("baseline", [
       ('input_type', 'gaussian_spec'),
       ('input_spec_upsample', 'default'),
-      ('input_recon_domain', 'r9y9_legacy'),
+      ('train_recon_domain', 'r9y9_legacy'),
+    ]),
+    ("slicespec", [
+      ('input_type', 'gaussian_spec'),
+      ('input_spec_upsample', 'default'),
+      ('train_recon_domain', 'r9y9'),
     ]),
     ("linmagspec", [
       ('input_type', 'gaussian_spec'),
       ('input_spec_upsample', 'default'),
-      ('input_recon_domain', 'r9y9_legacy'),
+      ('train_recon_domain', 'linmagspec'),
     ]),
-    ("upinterp", [
+    ("logmagspec", [
       ('input_type', 'gaussian_spec'),
       ('input_spec_upsample', 'default'),
-      ('input_recon_domain', 'r9y9_legacy'),
+      ('train_recon_domain', 'logmagspec'),
     ]),
-    ("uplearn", [
+    ("uplinear", [
       ('input_type', 'gaussian_spec'),
-      ('input_spec_upsample', 'default'),
-      ('input_recon_domain', 'r9y9_legacy'),
+      ('input_spec_upsample', 'linear'),
+      ('train_recon_domain', 'r9y9_legacy'),
+    ]),
+    ("uplearned", [
+      ('input_type', 'gaussian_spec'),
+      ('input_spec_upsample', 'learned'),
+      ('train_recon_domain', 'r9y9_legacy'),
     ]),
 ]
 
