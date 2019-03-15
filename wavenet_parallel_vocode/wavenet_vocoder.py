@@ -6,6 +6,7 @@ import advoc.spectral
 
 from model import AudioModel, Modes
 from wavenet import build_nsynth_wavenet_decoder, build_nsynth_wavenet_encoder
+from wavegan import WaveGANDiscriminator
 
 
 class WavenetVocoder(AudioModel):
@@ -27,7 +28,7 @@ class WavenetVocoder(AudioModel):
   ae_num_layers = 30
   ae_filter_length = 3
   ae_width = 128
-  ae_hop_length = 512
+  ae_hop_length = 256
 
   # Other model params
   input_type = 'gaussian_spec' #'gaussian_spec', 'uniform_spec', 'spec_none', 'spec_spec'
@@ -40,6 +41,7 @@ class WavenetVocoder(AudioModel):
   train_gan = False
   train_gan_objective = 'wgangp'
   train_gan_multiplier = 1.
+  train_gan_disc_arch = 'wavegan_waveonly'
   train_wgangp_lambda = 10
   train_batch_size = 32
   train_lr = 2e-4
@@ -186,28 +188,55 @@ class WavenetVocoder(AudioModel):
         raise ValueError()
 
       if self.train_gan:
+        if self.train_gan_disc_arch == 'nsynth_patched_waveonly':
+          def build_discriminator(real_or_fake_wave, _):
+            return build_nsynth_wavenet_encoder(
+                real_or_fake_wave[:, :, 0, :],
+                num_stages=self.ae_num_stages,
+                num_layers=self.ae_num_layers,
+                filter_length=self.ae_filter_length,
+                width=self.ae_width,
+                hop_length=self.ae_hop_length,
+                bottleneck_width=1)[:, :, :, tf.newaxis]
+        elif self.train_gan_disc_arch == 'wavegan_waveonly':
+          def build_discriminator(real_or_fake_wave, real_spec):
+            return WaveGANDiscriminator(
+                real_or_fake_wave,
+                spec=None,
+                patched=False,
+                phaseshuffle_rad=2)
+        elif self.train_gan_disc_arch == 'wavegan_wavespec':
+          def build_discriminator(real_or_fake_wave, real_spec):
+            return WaveGANDiscriminator(
+                real_or_fake_wave,
+                real_spec,
+                patched=False,
+                phaseshuffle_rad=2)
+        elif self.train_gan_disc_arch == 'wavegan_patched_waveonly':
+          def build_discriminator(real_or_fake_wave, real_spec):
+            return WaveGANDiscriminator(
+                real_or_fake_wave,
+                spec=None,
+                patched=True,
+                phaseshuffle_rad=2)
+        elif self.train_gan_disc_arch == 'wavegan_patched_wavespec':
+          def build_discriminator(real_or_fake_wave, real_spec):
+            return WaveGANDiscriminator(
+                real_or_fake_wave,
+                real_spec,
+                patched=True,
+                phaseshuffle_rad=2)
+        else:
+          raise ValueError()
+
         with tf.name_scope('D_x'), tf.variable_scope('discriminator'):
           # TODO: get spec into encoder somehow
-          D_x = build_nsynth_wavenet_encoder(
-              x_wave[:, :, 0, :],
-              num_stages=self.ae_num_stages,
-              num_layers=self.ae_num_layers,
-              filter_length=self.ae_filter_length,
-              width=self.ae_width,
-              hop_length=self.ae_hop_length,
-              bottleneck_width=1)
+          D_x = build_discriminator(x_wave, x_r9y9)
         D_vars = tf.trainable_variables(scope='discriminator')
         assert len(D_vars) == len(tf.global_variables('discriminator'))
 
         with tf.name_scope('D_G_z'), tf.variable_scope('discriminator', reuse=True):
-          D_G_z = build_nsynth_wavenet_encoder(
-              vocoded_wave[:, :, 0, :],
-              num_stages=self.ae_num_stages,
-              num_layers=self.ae_num_layers,
-              filter_length=self.ae_filter_length,
-              width=self.ae_width,
-              hop_length=self.ae_hop_length,
-              bottleneck_width=1)
+          D_G_z = build_discriminator(vocoded_wave, x_r9y9)
 
         if self.train_gan_objective == 'dcgan':
           fake = tf.zeros_like(D_G_z)
@@ -237,15 +266,8 @@ class WavenetVocoder(AudioModel):
           alpha = tf.random_uniform(shape=[batch_size, 1, 1, 1], minval=0., maxval=1.)
           differences = vocoded_wave - x_wave
           interpolates = x_wave + (alpha * differences)
-          with tf.name_scope('D_G_z'), tf.variable_scope('discriminator', reuse=True):
-            D_interp = build_nsynth_wavenet_encoder(
-                interpolates[:, :, 0, :],
-                num_stages=self.ae_num_stages,
-                num_layers=self.ae_num_layers,
-                filter_length=self.ae_filter_length,
-                width=self.ae_width,
-                hop_length=self.ae_hop_length,
-                bottleneck_width=1)
+          with tf.name_scope('D_interp'), tf.variable_scope('discriminator', reuse=True):
+            D_interp = build_discriminator(interpolates, x_r9y9)
 
           gradients = tf.gradients(D_interp, [interpolates])[0]
           slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2, 3]))
