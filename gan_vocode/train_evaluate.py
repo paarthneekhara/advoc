@@ -112,11 +112,11 @@ def eval(fps, args):
   gen_spec = tf.contrib.signal.stft(G_z[:,:,0,0], 1024, 256, pad_end=True)
   gen_spec_mag = tf.abs(gen_spec)
 
-  target_spec = tf.contrib.signal.stft(x_wav[:,:,0,0], 1024, 256, pad_end=True)
-  target_spec_mag = tf.abs(target_spec)
+  x_wav_r9y9 = tf.stop_gradient(advoc.spectral.waveform_to_r9y9_melspec_tf(x_wav, fs=model.audio_fs))
+  G_z_r9y9 = advoc.spectral.waveform_to_r9y9_melspec_tf(G_z, fs=model.audio_fs)
 
-  spec_l1 = tf.reduce_mean(tf.abs(target_spec_mag - gen_spec_mag))
-  spec_l2 = tf.reduce_mean(tf.square(target_spec_mag - gen_spec_mag))
+  spec_l1 = tf.reduce_mean(tf.abs(G_z_r9y9 - x_wav_r9y9))
+  spec_l2 = tf.reduce_mean(tf.square(G_z_r9y9 - x_wav_r9y9))
 
   # WaveNet eval
   wavenet_graph = tf.Graph()
@@ -147,8 +147,8 @@ def eval(fps, args):
   summaries = [
     tf.summary.scalar('wav_l1', tf.reduce_mean(all_wav_l1)),
     tf.summary.scalar('wav_l2', tf.reduce_mean(all_wav_l2)),
-    tf.summary.scalar('spec_l1', tf.reduce_mean(all_spec_l1)),
-    tf.summary.scalar('spec_l2', tf.reduce_mean(all_spec_l2)),
+    tf.summary.scalar('r9y9_l1', tf.reduce_mean(all_spec_l1)),
+    tf.summary.scalar('r9y9_l2', tf.reduce_mean(all_spec_l2)),
     tf.summary.scalar('wavenet_nll', tf.reduce_mean(wavenet_all_nll))
   ]
   summaries = tf.summary.merge(summaries)
@@ -389,6 +389,7 @@ if __name__ == '__main__':
       mode=None,
       train_dir=None,
       data_dir=None,
+      vocoder_model='regular',
       data_fastwav=False,
       data_overlap_ratio=0.25,
       model_overrides=None,

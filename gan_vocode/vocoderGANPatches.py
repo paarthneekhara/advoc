@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 from model import Model, Modes
-
+import advoc.spectral
 
 def _conv_filter(input_, k_size=5, stddev=0.02):
   w_t = tf.get_variable('w', [k_size, 1, input_.get_shape()[-1], 1])
@@ -24,8 +24,8 @@ class VocoderGAN(Model):
   wgangp_nupdates = 5
   gen_nonlin = 'relu'
   gan_strategy = 'wgangp'
-  recon_loss_type = 'wav' # wav, spec
-  recon_objective = 'l1' # l1, l2
+  recon_loss_type = 'r9y9' # wav, spec, r9y9
+  recon_objective = 'l2' # l1, l2
   discriminator_type = "patched" # patched, regular
   recon_regularizer = 1. 
   train_batch_size = 64
@@ -219,29 +219,40 @@ class VocoderGAN(Model):
       D_G_z = self.build_discriminator(G_z)
     D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='D')
 
-    self.wav_l1 = wav_l1 = tf.reduce_mean(tf.abs(x_wav - G_z))
-    self.wav_l2 = wav_l2 = tf.reduce_mean(tf.square(x_wav - G_z))
-
+    
     gen_spec = tf.contrib.signal.stft(G_z[:,:,0,0], 1024, 256, pad_end=True)
     gen_spec_mag = tf.abs(gen_spec)
 
     target_spec = tf.contrib.signal.stft(x_wav[:,:,0,0], 1024, 256, pad_end=True)
     target_spec_mag = tf.abs(target_spec)
 
+    x_wav_r9y9 = tf.stop_gradient(advoc.spectral.waveform_to_r9y9_melspec_tf(x_wav, fs=self.audio_fs))
+    G_z_r9y9 = advoc.spectral.waveform_to_r9y9_melspec_tf(G_z, fs=self.audio_fs)
+
+    self.wav_l1 = wav_l1 = tf.reduce_mean(tf.abs(x_wav - G_z))
+    self.wav_l2 = wav_l2 = tf.reduce_mean(tf.square(x_wav - G_z))
+
     self.spec_l1 = spec_l1 = tf.reduce_mean(tf.abs(target_spec_mag - gen_spec_mag))
     self.spec_l2 = spec_l2 = tf.reduce_mean(tf.square(target_spec_mag - gen_spec_mag))
 
-    
+    self.r9y9_l1 = r9y9_l1 = tf.reduce_mean(tf.abs(G_z_r9y9 - x_wav_r9y9))
+    self.r9y9_l2 = r9y9_l2 = tf.reduce_mean(tf.square(G_z_r9y9 - x_wav_r9y9))
+
     if self.recon_objective == 'l1':
       if self.recon_loss_type == 'wav':
         self.recon_loss = wav_l1
       elif self.recon_loss_type == 'spec':
         self.recon_loss = spec_l1
+      elif self.recon_loss_type == 'r9y9':
+        self.recon_loss = r9y9_l1
+    
     elif self.recon_objective == 'l2':
       if self.recon_loss_type == 'wav':
         self.recon_loss = wav_l2
       elif self.recon_loss_type == 'spec':
         self.recon_loss = spec_l2
+      elif self.recon_loss_type == 'r9y9':
+        self.recon_loss = r9y9_l2
 
     # WGAN-GP loss
 
@@ -329,7 +340,7 @@ class VocoderGAN(Model):
     
     tf.summary.scalar('G_loss_total', G_loss_total)
     tf.summary.scalar('Recon_loss', self.recon_loss)
-    tf.summary.scalar('spec_l2', spec_l2)
+    tf.summary.scalar('r9y9_l2', r9y9_l2)
     tf.summary.scalar('wav_l1', wav_l1)
 
     if self.use_adversarial:
