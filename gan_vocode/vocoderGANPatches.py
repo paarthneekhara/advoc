@@ -205,7 +205,7 @@ class VocoderGAN(Model):
 
     # Noise var
     z = tf.random.normal([batch_size, 1, 1, self.zdim], dtype=tf.float32)
-    z_tiled = z * tf.constant(1.0, shape=[batch_size, 64, 1, self.zdim])
+    z_tiled = z * tf.constant(1.0, shape=[batch_size, self.subseq_len, 1, self.zdim])
 
     # Generator
     with tf.variable_scope('G'):
