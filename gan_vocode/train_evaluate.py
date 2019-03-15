@@ -4,6 +4,7 @@ from model import Modes
 from util import override_model_attrs
 import numpy as np
 import time
+import advoc.spectral
 
 def train(fps, args):
   # Initialize model
