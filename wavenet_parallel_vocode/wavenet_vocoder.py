@@ -34,7 +34,7 @@ class WavenetVocoder(AudioModel):
   input_spec_upsample = 'default' #'lin', 'learned'
 
   # Training
-  train_recon_domain = 'r9y9_legacy' # wave, r9y9, linmagspec, logmagspec
+  train_recon_domain = 'r9y9' # wave, r9y9, linmagspec, logmagspec
   train_recon_norm = 'l2' #'l2' # l1, l2
   train_recon_multiplier = 1.
   train_gan = False
