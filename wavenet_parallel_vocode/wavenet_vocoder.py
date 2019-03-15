@@ -70,7 +70,7 @@ class WavenetVocoder(AudioModel):
     # Optionally upsample r9y9trogram
     if self.input_spec_upsample == 'default':
       x_r9y9_up = x_r9y9
-    elif self.input_spec_upsample == 'nearest_neighbor':
+    elif self.input_spec_upsample == 'tile':
       x_r9y9_up = tf.stop_gradient(tf.image.resize_nearest_neighbor(
           x_r9y9,
           [self.subseq_nsamps, nmels]))
@@ -105,13 +105,16 @@ class WavenetVocoder(AudioModel):
       input_wave = tf.random.normal([batch_size, self.subseq_nsamps, 1, 1], dtype=tf.float32)
       input_cond = x_r9y9_up
     elif self.input_type == 'spec_none':
-      input_wave = x_r9y9_up
+      assert self.input_spec_upsample != 'default'
+      input_wave = tf.transpose(x_r9y9_up, [0, 1, 3, 2])
       input_cond = None
     elif self.input_type == 'spec_spec':
-      input_wave = x_r9y9_up
+      assert self.input_spec_upsample != 'default'
+      input_wave = tf.transpose(x_r9y9_up, [0, 1, 3, 2])
       input_cond = x_r9y9_up
     elif self.input_type == 'spec_lospec':
-      input_wave = x_r9y9_up
+      assert self.input_spec_upsample != 'default'
+      input_wave = tf.transpose(x_r9y9_up, [0, 1, 3, 2])
       input_cond = x_r9y9
     else:
       raise ValueError()
@@ -119,7 +122,7 @@ class WavenetVocoder(AudioModel):
     with tf.variable_scope('vocoder'):
       self.vocoded_wave = vocoded_wave = build_nsynth_wavenet_decoder(
           input_wave[:, :, 0, :],
-          input_cond[:, :, :, 0] if input_cond is not None else input_cond,
+          input_cond[:, :, :, 0] if input_cond is not None else None,
           causal=self.causal,
           output_width=1,
           num_stages=self.num_stages,
