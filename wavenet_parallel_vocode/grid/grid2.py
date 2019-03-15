@@ -34,6 +34,14 @@ EXP_ALL_HYPER = [
 ]
 
 EXPS = [
+    ("uniformspec_default", [
+      ('input_type', 'uniform_spec'),
+      ('input_spec_upsample', 'default'),
+    ]),
+    ("uniformspec_linear", [
+      ('input_type', 'uniform_spec'),
+      ('input_spec_upsample', 'linear'),
+    ]),
     ("gaussspec_linear", [
       ('input_type', 'gaussian_spec'),
       ('input_spec_upsample', 'linear'),
