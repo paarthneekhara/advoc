@@ -42,6 +42,8 @@ class WavenetVocoder(AudioModel):
   train_gan_objective = 'wgangp'
   train_gan_multiplier = 1.
   train_gan_disc_arch = 'wavegan_waveonly'
+  train_gan_wavegan_phaseshuffle = 2
+  train_gan_wavegan_dim = 64
   train_wgangp_lambda = 10
   train_batch_size = 32
   train_lr = 2e-4
@@ -204,28 +206,32 @@ class WavenetVocoder(AudioModel):
                 real_or_fake_wave,
                 spec=None,
                 patched=False,
-                phaseshuffle_rad=2)
+                dim=self.train.gan_wavegan_dim,
+                phaseshuffle_rad=self.train_gan_wavegan_phaseshuffle)
         elif self.train_gan_disc_arch == 'wavegan_wavespec':
           def build_discriminator(real_or_fake_wave, real_spec):
             return WaveGANDiscriminator(
                 real_or_fake_wave,
                 real_spec,
                 patched=False,
-                phaseshuffle_rad=2)
+                dim=self.train.gan_wavegan_dim,
+                phaseshuffle_rad=self.train_gan_wavegan_phaseshuffle)
         elif self.train_gan_disc_arch == 'wavegan_patched_waveonly':
           def build_discriminator(real_or_fake_wave, real_spec):
             return WaveGANDiscriminator(
                 real_or_fake_wave,
                 spec=None,
                 patched=True,
-                phaseshuffle_rad=2)
+                dim=self.train.gan_wavegan_dim,
+                phaseshuffle_rad=self.train_gan_wavegan_phaseshuffle)
         elif self.train_gan_disc_arch == 'wavegan_patched_wavespec':
           def build_discriminator(real_or_fake_wave, real_spec):
             return WaveGANDiscriminator(
                 real_or_fake_wave,
                 real_spec,
                 patched=True,
-                phaseshuffle_rad=2)
+                dim=self.train.gan_wavegan_dim,
+                phaseshuffle_rad=self.train_gan_wavegan_phaseshuffle)
         else:
           raise ValueError()
 
