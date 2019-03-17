@@ -65,7 +65,7 @@ def WaveGANDiscriminator(
     phaseshuffle = lambda x: x
 
   # Layer 0
-  # [16384, 1] -> [4096, 64]
+  # [6144, 1] -> [1536, 64]
   output = x
   with tf.variable_scope('downconv_0'):
     output = conv1d(output, dim)
@@ -73,34 +73,36 @@ def WaveGANDiscriminator(
   output = phaseshuffle(output)
 
   # Layer 1
-  # [4096, 64] -> [1024, 128]
+  # [1536, 64] -> [384, 128]
   with tf.variable_scope('downconv_1'):
     output = conv1d(output, dim * 2)
   output = lrelu(output)
   output = phaseshuffle(output)
 
   # Layer 2
-  # [1024, 128] -> [256, 256]
+  # [384, 128] -> [96, 256]
   with tf.variable_scope('downconv_2'):
     output = conv1d(output, dim * 4)
   output = lrelu(output)
   output = phaseshuffle(output)
 
   # Layer 3
-  # [256, 256] -> [64, 512]
+  # [96, 256] -> [24, 512]
   with tf.variable_scope('downconv_3'):
     output = conv1d(output, dim * 8)
+  output = lrelu(output)
+  output = phaseshuffle(output)
+
+  # Layer 4
+  # [24, 512] -> [6, 1024]
+  with tf.variable_scope('downconv_4'):
+    output = conv1d(output, dim * 16)
   output = lrelu(output)
 
   if patched:
     with tf.variable_scope('output'):
       output = conv1x1d(output, 1)
   else:
-    output = phaseshuffle(output)
-    with tf.variable_scope('downconv_4'):
-      output = conv1d(output, dim * 16)
-    output = lrelu(output)
-
     output = tf.reshape(output, [batch_size, -1])
 
     with tf.variable_scope('output'):
