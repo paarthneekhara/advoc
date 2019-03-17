@@ -59,7 +59,13 @@ EXPS = [
       ('train_gan_disc_arch', 'wavegan_patched_waveonly'),
       ('train_gan_wavegan_dim', '32'),
     ]),
-
+    ("gausspec_wavegan_patched_deeper_waveonly", [
+      ('train_gan_disc_arch', 'wavegan_waveonly'),
+    ]),
+    ("gausspec_wavegan_patched_deeper_small_waveonly", [
+      ('train_gan_disc_arch', 'wavegan_waveonly'),
+      ('train_gan_wavegan_dim', '32'),
+    ]),
 ]
 
 tensorboard = []
