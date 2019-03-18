@@ -24,7 +24,12 @@ class VocoderGAN(Model):
   wgangp_nupdates = 5
   gen_nonlin = 'relu'
   gan_strategy = 'wgangp'
-  recon_loss_type = 'r9y9' # wav, spec, r9y9
+  recon_loss_type = 'r9y9' # wav, spec, r9y9, combine
+
+  c_wav = 1.
+  c_spec = 1.
+  c_r9y9 = 1.
+
   recon_objective = 'l2' # l1, l2
   discriminator_type = "patched" # patched, regular
   recon_regularizer = 1. 
@@ -171,16 +176,19 @@ class VocoderGAN(Model):
     with tf.variable_scope('downconv_3'):
       output = conv1d(output, self.dim * 8)
     output = lrelu(output)
-    
+    output = phaseshuffle(output)
 
     if self.discriminator_type == "patched":
+      with tf.variable_scope('downconv_4'):
+        output = conv1d(output, self.dim * 16)
+      output = lrelu(output)
+
       output = conv1x1d(output, 1)
 
       return output[:,:,0,0]
 
     elif self.discriminator_type == "regular":
       # apply phase shuffle to the previous downconv
-      output = phaseshuffle(output)
       with tf.variable_scope('downconv_4'):
         output = conv1d(output, self.dim * 16)
       output = lrelu(output)
@@ -245,6 +253,11 @@ class VocoderGAN(Model):
         self.recon_loss = spec_l1
       elif self.recon_loss_type == 'r9y9':
         self.recon_loss = r9y9_l1
+      elif self.recon_loss_type == 'combine':
+        print("Combine l1")
+        self.recon_loss = self.c_wav * wav_l1
+        self.recon_loss += self.c_spec * spec_l1
+        self.recon_loss += self.c_r9y9 * r9y9_l1
     
     elif self.recon_objective == 'l2':
       if self.recon_loss_type == 'wav':
@@ -253,6 +266,11 @@ class VocoderGAN(Model):
         self.recon_loss = spec_l2
       elif self.recon_loss_type == 'r9y9':
         self.recon_loss = r9y9_l2
+      elif self.recon_loss_type == 'combine':
+        print("Combine l2")
+        self.recon_loss = self.c_wav * wav_l2
+        self.recon_loss += self.c_spec * spec_l2
+        self.recon_loss += self.c_r9y9 * r9y9_l2
 
     # WGAN-GP loss
 
@@ -342,6 +360,7 @@ class VocoderGAN(Model):
     tf.summary.scalar('Recon_loss', self.recon_loss)
     tf.summary.scalar('r9y9_l2', r9y9_l2)
     tf.summary.scalar('wav_l1', wav_l1)
+    tf.summary.scalar('spec_l2', spec_l2)
 
     if self.use_adversarial:
       tf.summary.scalar('G_loss', G_loss)
