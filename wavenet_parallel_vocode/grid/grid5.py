@@ -47,6 +47,10 @@ EXPS = [
       ('train_if', 'True'),
       ('train_if_multiplier', '1'),
     ]),
+    ("gausspec_distill_wavenet_10xmult", [
+      ('train_distill', 'True'),
+      ('train_distill_multiplier', '0.1'),
+    ]),
 ]
 
 tensorboard = []
