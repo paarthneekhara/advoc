@@ -17,6 +17,9 @@ class AudioModel(object):
   def get_global_variables(self):
     raise Exception('Abstract method')
 
+  def pretrain_hook(self, sess):
+    pass
+
   def train_loop(self, sess):
     raise Exception('Abstract method')
 

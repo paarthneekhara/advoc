@@ -5,7 +5,7 @@ import advoc.util
 import advoc.spectral
 
 from model import AudioModel, Modes
-from wavenet import build_nsynth_wavenet_decoder, build_nsynth_wavenet_encoder
+from wavenet import build_nsynth_wavenet_decoder, build_nsynth_wavenet_encoder, shift_right, mu_law
 from wavegan import WaveGANDiscriminator
 
 
@@ -44,7 +44,10 @@ class WavenetVocoder(AudioModel):
   train_gan_disc_arch = 'wavegan_waveonly'
   train_gan_wavegan_phaseshuffle = 2
   train_gan_wavegan_dim = 64
-  train_wgangp_lambda = 10
+  train_gan_wgangp_lambda = 10
+  train_distill = False
+  train_distill_multiplier = 1.
+  train_distill_ckpt_fp = ''
   train_batch_size = 32
   train_lr = 2e-4
 
@@ -278,7 +281,7 @@ class WavenetVocoder(AudioModel):
           gradients = tf.gradients(D_interp, [interpolates])[0]
           slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1, 2, 3]))
           gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
-          D_loss += self.train_wgangp_lambda * gradient_penalty
+          D_loss += self.train_gan_wgangp_lambda * gradient_penalty
 
           self.train_gan_num_disc_updates = 5
         else:
@@ -293,6 +296,36 @@ class WavenetVocoder(AudioModel):
 
         tf.summary.scalar('D_loss', D_loss)
         tf.summary.scalar('G_loss', G_loss)
+
+      if self.train_distill:
+        vocoded_wave_clipped = tf.clip_by_value(vocoded_wave, -1, 1)
+        vocoded_quantized = mu_law(vocoded_wave_clipped[:, :, 0, :])
+        vocoded_scaled = tf.cast(vocoded_quantized, tf.float32) / 128.
+        vocoded_shifted = shift_right(vocoded_scaled)
+        vocoded_indices = tf.cast(vocoded_quantized[:, :, 0], tf.int32) + 128
+        with tf.variable_scope('decoder'):
+          vocoded_logits = build_nsynth_wavenet_decoder(
+              vocoded_shifted,
+              None,
+              causal=False,
+              output_width=256,
+              num_stages=10,
+              num_layers=20,
+              filter_length=3,
+              width=128,
+              skip_width=128)
+        distill_wavenet_vars = tf.trainable_variables(scope='decoder')
+        assert len(distill_wavenet_vars) == len(tf.global_variables(scope='decoder'))
+        self.distill_saver = tf.train.Saver(var_list=distill_wavenet_vars)
+
+        self.train_distill_nll = train_distill_nll = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(
+              labels=vocoded_indices,
+              logits=vocoded_logits))
+
+        tf.summary.scalar('distill_nll', train_distill_nll)
+
+        loss += self.train_distill_multiplier * train_distill_nll
 
       x_r9y9_up_preview = tf.image.resize_nearest_neighbor(
           x_r9y9_up,
@@ -368,6 +401,12 @@ class WavenetVocoder(AudioModel):
       self.best_wav_l1 = None
       self.best_r9y9_l2 = None
       self.best_linmagspec_l2 = None
+
+
+  def pretrain_hook(self, sess):
+    if self.train_distill:
+      self.distill_saver.restore(sess, self.train_distill_ckpt_fp)
+      print('Loaded WaveNet')
 
 
   def train_loop(self, sess):

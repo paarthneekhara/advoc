@@ -61,6 +61,7 @@ def train(fps, args):
       checkpoint_dir=args.train_dir,
       save_checkpoint_secs=args.train_ckpt_every_nsecs,
       save_summaries_secs=args.train_summary_every_nsecs) as sess:
+    model.pretrain_hook(sess)
     while not sess.should_stop():
       model.train_loop(sess)
 
