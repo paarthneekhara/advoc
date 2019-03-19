@@ -45,6 +45,10 @@ class WavenetVocoder(AudioModel):
   train_gan_wavegan_phaseshuffle = 2
   train_gan_wavegan_dim = 64
   train_gan_wgangp_lambda = 10
+  train_if = False
+  train_if_multiplier = 1.
+  train_if_mask_min = 0.4
+  train_if_mask_max = 0.6
   train_distill = False
   train_distill_multiplier = 1.
   train_distill_ckpt_fp = ''
@@ -151,8 +155,10 @@ class WavenetVocoder(AudioModel):
     vocoded_wave_r9y9 = advoc.spectral.waveform_to_r9y9_melspec_tf(vocoded_wave, fs=self.audio_fs)
 
     # TODO: Reshape these to proper chris-like spectrogram
-    x_wave_linmagspec = tf.stop_gradient(tf.abs(tf.contrib.signal.stft(x_wave[:, :, 0, 0], 1024, 256, pad_end=True)))
-    vocoded_wave_linmagspec = tf.abs(tf.contrib.signal.stft(vocoded_wave[:, :, 0, 0], 1024, 256, pad_end=True))
+    x_wave_spec = tf.contrib.signal.stft(x_wave[:,  :, 0, 0], 1024, 256, pad_end=True)
+    vocoded_wave_spec = tf.contrib.signal.stft(vocoded_wave[:, :, 0, 0], 1024, 256, pad_end=True)
+    x_wave_linmagspec = tf.stop_gradient(tf.abs(x_wave_spec))
+    vocoded_wave_linmagspec = tf.abs(vocoded_wave_spec)
 
     x_wave_logmagspec = tf.stop_gradient(tf.log(x_wave_linmagspec + 1e-10))
     vocoded_wave_logmagspec = tf.log(vocoded_wave_linmagspec + 1e-10)
@@ -297,12 +303,41 @@ class WavenetVocoder(AudioModel):
         tf.summary.scalar('D_loss', D_loss)
         tf.summary.scalar('G_loss', G_loss)
 
+      if self.train_if:
+        x_wave_phase = tf.angle(x_wave_spec)
+        vocoded_wave_phase = tf.angle(vocoded_wave_spec)
+
+        x_wave_if = tf.stop_gradient(x_wave_phase[:, 1:, :] - x_wave_phase[:, :-1, :])
+        vocoded_wave_if = vocoded_wave_phase[:, 1:, :] - vocoded_wave_phase[:, :-1, :]
+
+        # Phase is [-pi, pi] so delta phase is [-2pi, 2pi]
+        # Convert this to [0, 1]
+        x_wave_if = (x_wave_if + (2. * np.pi)) / (4. * np.pi)
+        vocoded_wave_if = (vocoded_wave_if + (2. * np.pi)) / (4. * np.pi)
+
+        mask = tf.logical_and(
+            tf.greater_equal(x_wave_if, self.train_if_mask_min),
+            tf.less_equal(x_wave_if, self.train_if_mask_max))
+        mask = tf.cast(mask, tf.float32)
+
+        weighted_mean = lambda x, m: tf.reduce_sum(x * m) / tf.reduce_sum(m)
+
+        self.if_l1 = if_l1 = weighted_mean(tf.abs(vocoded_wave_if - x_wave_if), mask)
+        self.if_l2 = if_l2 = weighted_mean(tf.square(vocoded_wave_if - x_wave_if), mask)
+
+        tf.summary.image('x_if', advoc.util.r9y9_melspec_to_uint8_img(x_wave_if[:, :, :, tf.newaxis]))
+        tf.summary.image('x_vocoded_if', advoc.util.r9y9_melspec_to_uint8_img(vocoded_wave_if[:, :, :, tf.newaxis]))
+        tf.summary.scalar('if_l1', if_l1)
+        tf.summary.scalar('if_l2', if_l2)
+
+        loss += self.train_if_multiplier * if_l2
+
       if self.train_distill:
-        vocoded_wave_clipped = tf.clip_by_value(vocoded_wave, -1, 1)
-        vocoded_quantized = mu_law(vocoded_wave_clipped[:, :, 0, :])
+        vocoded_quantized = mu_law(vocoded_wave[:, :, 0, :])
+        vocoded_quantized = tf.clip_by_value(vocoded_quantized, -128., 127.)
         vocoded_scaled = tf.cast(vocoded_quantized, tf.float32) / 128.
         vocoded_shifted = shift_right(vocoded_scaled)
-        vocoded_indices = tf.cast(vocoded_quantized[:, :, 0], tf.int32) + 128
+        vocoded_indices = tf.stop_gradient(tf.cast(vocoded_quantized[:, :, 0], tf.int32) + 128)
         with tf.variable_scope('decoder'):
           vocoded_logits = build_nsynth_wavenet_decoder(
               vocoded_shifted,
