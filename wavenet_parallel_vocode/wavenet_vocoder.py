@@ -325,8 +325,8 @@ class WavenetVocoder(AudioModel):
         self.if_l1 = if_l1 = weighted_mean(tf.abs(vocoded_wave_if - x_wave_if), mask)
         self.if_l2 = if_l2 = weighted_mean(tf.square(vocoded_wave_if - x_wave_if), mask)
 
-        tf.summary.image('x_if', advoc.util.r9y9_melspec_to_uint8_img(x_wave_if[:, :, :, tf.newaxis]))
-        tf.summary.image('x_vocoded_if', advoc.util.r9y9_melspec_to_uint8_img(vocoded_wave_if[:, :, :, tf.newaxis]))
+        tf.summary.image('x_if', advoc.util.r9y9_melspec_to_uint8_img((x_wave_if * mask)[:, :, :, tf.newaxis]))
+        tf.summary.image('x_vocoded_if', advoc.util.r9y9_melspec_to_uint8_img((vocoded_wave_if * mask)[:, :, :, tf.newaxis]))
         tf.summary.scalar('if_l1', if_l1)
         tf.summary.scalar('if_l2', if_l2)
 
