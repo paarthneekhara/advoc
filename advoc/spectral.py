@@ -291,35 +291,42 @@ def waveform_to_r9y9_melspec_tf(x, fs=22050):
       nhop=256)
 
 
-def r9y9_melspec_to_waveform(X_mel_dbnorm, fs=22050, waveform_len=None):
-  """Approximately inverts unofficial mel spectrogram to waveform.
+# NOTE: nfft and hop are configured for fs=20480
+def melspec_to_waveform(
+    X_mel_dbnorm,
+    fs,
+    nfft,
+    nhop,
+    mel_min=125,
+    mel_max=7600,
+    norm_min_level_db=-100,
+    norm_ref_level_db=20,
+    waveform_len=None):
+  """Approximately inverts mel spectrogram to waveform.
 
   Args:
-    X_mel_dbnorm: nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
-    fs: Output sample rate (should be 22050 to be the same as r9y9).
-    waveform_len: If specified, pad or trim output waveform to be this long.
+    X_mel: nd-array dtype float64 of shape [?, mel_num_bins, num_ch].
+    fs: Sample rate of waveform.
+    nfft: FFT size.
+    nhop: Window size.
+    mel_min: Minimum frequency for mel transform.
+    mel_max: Maximum frequency for mel transform.
+    norm_allow_clipping: If False, throws error if data is clipped during norm.
+    norm_min_level_db: Minimum dB level.
+    norm_ref_level_db: Maximum dB level (clips between this and 0).
+    waveform_len: If specified, pad or clip output to this length.
 
   Returns:
-    nd-array dtype float32 of shape [?, 1, 1].
+    nd-array dtype float32 of shape [waveform_len, 1, num_ch] containing the features.
   """
   if X_mel_dbnorm.dtype != np.float64:
     raise ValueError()
 
-  nsamps, nfeats, nch = X_mel_dbnorm.shape
-  if nfeats != 80:
-    raise ValueError()
+  nsamps, mel_num_bins, nch = X_mel_dbnorm.shape
   if nch != 1:
     raise NotImplementedError('Can only invert monaural signals')
   X_mel_dbnorm = X_mel_dbnorm[:, :, 0]
 
-  norm_min_level_db = -100
-  norm_ref_level_db = 20
-  nfft = 1024
-  nhop = 256
-  mel_min = 125
-  mel_max = 7600
-  mel_num_bins = 80
-  
   X_mel_db = (X_mel_dbnorm * -norm_min_level_db) + norm_min_level_db
   X_mel = np.power(10, (X_mel_db + norm_ref_level_db) / 20)
 
@@ -342,3 +349,22 @@ def r9y9_melspec_to_waveform(X_mel_dbnorm, fs=22050, waveform_len=None):
       x_lws = x_lws[:waveform_len]
 
   return x_lws[:, np.newaxis, np.newaxis].astype(np.float32)
+
+
+def r9y9_melspec_to_waveform(X_mel_dbnorm, fs=22050, waveform_len=None):
+  """Approximately inverts unofficial mel spectrogram to waveform.
+
+  Args:
+    X_mel_dbnorm: nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
+    fs: Output sample rate (should be 22050 to be the same as r9y9).
+    waveform_len: If specified, pad or trim output waveform to be this long.
+
+  Returns:
+    nd-array dtype float32 of shape [?, 1, 1].
+  """
+  return melspec_to_waveform(
+      X_mel_dbnorm,
+      fs=fs,
+      nfft=1024,
+      nhop=256,
+      waveform_len=waveform_len)
