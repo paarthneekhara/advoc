@@ -201,7 +201,9 @@ class SrezMelSpec(Model):
         gen_mag_spec = self.build_generator(x)
       elif self.generator_type == "linear":
         gen_mag_spec = self.build_linear_generator(x)
-
+      else:
+        raise NotImplementedError()
+        
     with tf.name_scope("real_discriminator"):
       with tf.variable_scope("discriminator"):
         predict_real = self.build_discriminator(x, target)

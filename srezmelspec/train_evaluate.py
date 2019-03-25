@@ -113,7 +113,13 @@ def eval(fps, args):
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
 
   with tf.variable_scope("generator") as vs:
-    gen_mag_spec = model.build_generator(x_inverted_mag_spec)
+    if model.generator_type == "pix2pix":
+      gen_mag_spec = model.build_generator(x_inverted_mag_spec)
+    elif model.generator_type == "linear":
+      gen_mag_spec = model.build_linear_generator(x_inverted_mag_spec)
+    else:
+      raise NotImplementedError()
+      
     G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
 
   gen_loss_L1 = tf.reduce_mean(tf.abs(x_mag_spec - gen_mag_spec))
@@ -209,7 +215,12 @@ def infer(fps, args):
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
 
   with tf.variable_scope("generator") as vs:
-    gen_mag_spec = model.build_generator(x_inverted_mag_spec)
+    if model.generator_type == "pix2pix":
+      gen_mag_spec = model.build_generator(x_inverted_mag_spec)
+    elif model.generator_type == "linear":
+      gen_mag_spec = model.build_linear_generator(x_inverted_mag_spec)
+    else:
+      raise NotImplementedError()
     G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
 
   step = tf.train.get_or_create_global_step()
