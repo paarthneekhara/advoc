@@ -120,6 +120,10 @@ def eval(fps, args):
     elif model.generator_type == "linear+pix2pix":
       _temp_spec = model.build_linear_generator(x_mel_spec)
       gen_mag_spec = model.build_linear_generator(_temp_spec)
+    elif model.generator_type == "interp+pix2pix":
+      _temp_spec = tf.image.resize(x_mel_spec, 
+        [batch_size, model.subseq_len, 513, 1])
+      gen_mag_spec = model.build_linear_generator(_temp_spec)
     else:
       raise NotImplementedError()
 
@@ -224,6 +228,10 @@ def infer(fps, args):
       gen_mag_spec = model.build_linear_generator(x_inverted_mag_spec)
     elif model.generator_type == "linear+pix2pix":
       _temp_spec = model.build_linear_generator(x_mel_spec)
+      gen_mag_spec = model.build_linear_generator(_temp_spec)
+    elif model.generator_type == "interp+pix2pix":
+      _temp_spec = tf.image.resize(x_mel_spec, 
+        [batch_size, model.subseq_len, 513, 1])
       gen_mag_spec = model.build_linear_generator(_temp_spec)
     else:
       raise NotImplementedError()
