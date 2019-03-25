@@ -13,7 +13,7 @@ class SrezMelSpec(Model):
   ngf = 64
   ndf = 64
   gan_weight = 1. 
-  l1_weight = 1.
+  l1_weight = 100.
   train_batch_size = 32
   eval_batch_size = 1
   use_adversarial = True #Train as a GAN or not
@@ -176,13 +176,11 @@ class SrezMelSpec(Model):
         convolved = self._discrim_conv(layers[-1], out_channels, stride=stride)
         normalized = batchnorm(convolved)
         rectified = lrelu(normalized, 0.2)
-        print("Disc", i, rectified)
         layers.append(rectified)
 
     with tf.variable_scope("layer_{}".format(len(layers) + 1)):
       convolved = self._discrim_conv(rectified, out_channels=1, stride=1)
       output = tf.sigmoid(convolved)
-      print(output)
       layers.append(output)
 
     return layers[-1]
@@ -253,7 +251,7 @@ class SrezMelSpec(Model):
   def train_loop(self, sess):
     if self.gan_weight > 0:
       sess.run(self.D_train_op)
-    _, _step = sess.run(self.G_train_op, self.step)
+    _, _step = sess.run([self.G_train_op, self.step])
     return _step
     
 
