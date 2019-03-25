@@ -74,7 +74,7 @@ class SrezMelSpec(Model):
         axis=3, 
         epsilon=1e-5, 
         momentum=0.1, 
-        training = self.mode == Modes.TRAIN)
+        training = True)
     else:
       batchnorm = lambda x: x
 
@@ -125,7 +125,10 @@ class SrezMelSpec(Model):
         output = self._gen_deconv(rectified, out_channels)
         output = batchnorm(output)
         if dropout > 0.0:
-          output = tf.nn.dropout(output, keep_prob=1 - dropout)
+          if self.mode == Modes.TRAIN:
+            output = tf.nn.dropout(output, keep_prob= 1 - dropout)
+          else:
+            output = tf.nn.dropout(output, keep_prob= 1 - dropout)
         layers.append(output)
 
     # decoder_1: [batch, 128, 128, ngf * 2] => [batch, 256, 256, generator_outputs_channels]
@@ -153,7 +156,7 @@ class SrezMelSpec(Model):
         axis=3, 
         epsilon=1e-5, 
         momentum=0.1,
-        training = self.mode == Modes.TRAIN)
+        training = True)
     else:
       batchnorm = lambda x: x
 
@@ -204,7 +207,11 @@ class SrezMelSpec(Model):
     discrim_loss = tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
     gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
     gen_loss_L1 = tf.reduce_mean(tf.abs(target - gen_mag_spec))
-    gen_loss = gen_loss_GAN * self.gan_weight + gen_loss_L1 * self.l1_weight
+    
+    if self.gan_weight > 0:
+      gen_loss = gen_loss_GAN * self.gan_weight + gen_loss_L1 * self.l1_weight
+    else:
+      gen_loss = gen_loss_L1 * self.l1_weight
 
     self.D_vars = D_vars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
     self.G_vars = G_vars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
@@ -212,8 +219,9 @@ class SrezMelSpec(Model):
     D_opt = tf.train.AdamOptimizer(0.0002, 0.5)
     G_opt = tf.train.AdamOptimizer(0.0002, 0.5)
     
+    self.step = step = tf.train.get_or_create_global_step()
     self.G_train_op = G_opt.minimize(gen_loss, var_list=G_vars,
-  global_step=tf.train.get_or_create_global_step())
+  global_step=self.step)
 
     self.D_train_op = D_opt.minimize(discrim_loss, var_list=D_vars)
 
@@ -225,6 +233,7 @@ class SrezMelSpec(Model):
     target_audio = tf.reshape(target_audio, [1, 66304, 1, 1] )
     gen_audio = tf.reshape(gen_audio, [1, 66304, 1, 1] )
     
+    
     tf.summary.audio('input_audio', input_audio[:, :, 0, :], self.audio_fs)
     tf.summary.audio('target_audio', target_audio[:, :, 0, :], self.audio_fs)
     tf.summary.audio('target_x_wav', x_wav[:, :, 0, :], self.audio_fs)
@@ -234,9 +243,17 @@ class SrezMelSpec(Model):
     tf.summary.scalar('gen_loss_GAN', gen_loss_GAN)
     tf.summary.scalar('disc_loss', discrim_loss)
 
+    #image summaries
+    tf.summary.image('input_magspec', tf.image.rot90(x))
+    tf.summary.image('generated_magspec', tf.image.rot90(gen_mag_spec))
+    tf.summary.image('target_magspec', tf.image.rot90(target))
+    
+
 
   def train_loop(self, sess):
-    sess.run(self.D_train_op)
-    sess.run(self.G_train_op)
+    if self.gan_weight > 0:
+      sess.run(self.D_train_op)
+    _, _step = sess.run(self.G_train_op, self.step)
+    return _step
     
 
