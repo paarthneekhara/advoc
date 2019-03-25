@@ -19,6 +19,7 @@ class SrezMelSpec(Model):
   use_adversarial = True #Train as a GAN or not
   separable_conv = False
   use_batchnorm = True
+  generator_type = "pix2pix" #pix2pix or linear
   spectral = SpectralUtil()
 
   def _discrim_conv(self, x, out_channels, stride):
@@ -66,6 +67,10 @@ class SrezMelSpec(Model):
           strides=(2, 2), 
           padding="same", 
           kernel_initializer=initializer)
+
+  def build_linear_generator(self, x):
+    gen = tf.layers.dense(x[:,:,:,0], 513)
+    return tf.expand_dims(gen, -1)
 
   def build_generator(self, x):
     
@@ -192,7 +197,10 @@ class SrezMelSpec(Model):
       batch_size = tf.shape(x)[0]
 
     with tf.variable_scope("generator"):
-      gen_mag_spec = self.build_generator(x)
+      if self.generator_type == "pix2pix":
+        gen_mag_spec = self.build_generator(x)
+      elif self.generator_type == "linear":
+        gen_mag_spec = self.build_linear_generator(x)
 
     with tf.name_scope("real_discriminator"):
       with tf.variable_scope("discriminator"):
