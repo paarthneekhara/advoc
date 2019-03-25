@@ -38,6 +38,8 @@ class SpectralUtil(object):
     return mag_spec
 
   def audio_from_mag_spec(self, mag_spec):
+    mag_spec = mag_spec.astype('float64')
     spec_lws = self.lws_processor.run_lws(mag_spec[:,:,0])
     magspec_inv = self.lws_processor.istft(spec_lws)[:, np.newaxis, np.newaxis]
+    magspec_inv = magspec_inv.astype('float32')
     return magspec_inv

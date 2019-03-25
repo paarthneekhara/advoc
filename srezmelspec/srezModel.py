@@ -184,7 +184,7 @@ class SrezMelSpec(Model):
 
     return layers[-1]
 
-  def __call__(self, x, target):
+  def __call__(self, x, target, x_wav):
     try:
       batch_size = int(x.get_shape()[0])
     except:
@@ -221,12 +221,13 @@ class SrezMelSpec(Model):
     target_audio = tf.py_func( self.spectral.audio_from_mag_spec, [target[0]], tf.float32, stateful=False)
     gen_audio = tf.py_func( self.spectral.audio_from_mag_spec, [gen_mag_spec[0]], tf.float32, stateful=False)
 
-    input_audio.set_shape([1, self.subseq_len * 64, 1, 1])
-    target_audio.set_shape([1, self.subseq_len * 64, 1, 1])
-    gen_audio.set_shape([1, self.subseq_len * 64, 1, 1])
-
+    input_audio = tf.reshape(input_audio, [1, 66304, 1, 1] )
+    target_audio = tf.reshape(target_audio, [1, 66304, 1, 1] )
+    gen_audio = tf.reshape(gen_audio, [1, 66304, 1, 1] )
+    
     tf.summary.audio('input_audio', input_audio[:, :, 0, :], self.audio_fs)
     tf.summary.audio('target_audio', target_audio[:, :, 0, :], self.audio_fs)
+    tf.summary.audio('target_x_wav', x_wav[:, :, 0, :], self.audio_fs)
     tf.summary.audio('gen_audio', gen_audio[:, :, 0, :], self.audio_fs)
     tf.summary.scalar('gen_loss_total', gen_loss)
     tf.summary.scalar('gen_loss_L1', gen_loss_L1)
