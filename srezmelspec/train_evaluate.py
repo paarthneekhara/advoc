@@ -59,7 +59,7 @@ def train(fps, args):
   x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
 
-  model(x_inverted_mag_spec, x_mag_spec, x_wav)
+  model(x_inverted_mag_spec, x_mag_spec, x_wav, x_mel_spec)
 
   #Train
   with tf.train.MonitoredTrainingSession(
@@ -117,9 +117,12 @@ def eval(fps, args):
       gen_mag_spec = model.build_generator(x_inverted_mag_spec)
     elif model.generator_type == "linear":
       gen_mag_spec = model.build_linear_generator(x_inverted_mag_spec)
+    elif model.generator_type == "linear+pix2pix":
+      _temp_spec = model.build_linear_generator(x_mel_spec)
+      gen_mag_spec = model.build_linear_generator(_temp_spec)
     else:
       raise NotImplementedError()
-      
+
     G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
 
   gen_loss_L1 = tf.reduce_mean(tf.abs(x_mag_spec - gen_mag_spec))
@@ -219,6 +222,9 @@ def infer(fps, args):
       gen_mag_spec = model.build_generator(x_inverted_mag_spec)
     elif model.generator_type == "linear":
       gen_mag_spec = model.build_linear_generator(x_inverted_mag_spec)
+    elif model.generator_type == "linear+pix2pix":
+      _temp_spec = model.build_linear_generator(x_mel_spec)
+      gen_mag_spec = model.build_linear_generator(_temp_spec)
     else:
       raise NotImplementedError()
     G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)

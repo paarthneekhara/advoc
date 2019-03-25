@@ -19,7 +19,7 @@ class SrezMelSpec(Model):
   use_adversarial = True #Train as a GAN or not
   separable_conv = False
   use_batchnorm = True
-  generator_type = "pix2pix" #pix2pix or linear
+  generator_type = "pix2pix" #pix2pix, linear, linear+pix2pix
   spectral = SpectralUtil()
 
   def _discrim_conv(self, x, out_channels, stride):
@@ -190,7 +190,7 @@ class SrezMelSpec(Model):
 
     return layers[-1]
 
-  def __call__(self, x, target, x_wav):
+  def __call__(self, x, target, x_wav, x_mel_spec):
     try:
       batch_size = int(x.get_shape()[0])
     except:
@@ -201,9 +201,12 @@ class SrezMelSpec(Model):
         gen_mag_spec = self.build_generator(x)
       elif self.generator_type == "linear":
         gen_mag_spec = self.build_linear_generator(x)
+      elif self.generator_type == "linear+pix2pix":
+        temp_spec = self.build_linear_generator(x_mel_spec)
+        gen_mag_spec = self.build_linear_generator(temp_spec)
       else:
         raise NotImplementedError()
-        
+
     with tf.name_scope("real_discriminator"):
       with tf.variable_scope("discriminator"):
         predict_real = self.build_discriminator(x, target)
@@ -252,6 +255,7 @@ class SrezMelSpec(Model):
     tf.summary.scalar('disc_loss', discrim_loss)
 
     #image summaries
+    tf.summary.image('input_melspec', tf.image.rot90(x_mel_spec))
     tf.summary.image('input_magspec', tf.image.rot90(x))
     tf.summary.image('generated_magspec', tf.image.rot90(gen_mag_spec))
     tf.summary.image('target_magspec', tf.image.rot90(target))
