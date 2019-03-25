@@ -206,7 +206,7 @@ class SrezMelSpec(Model):
         gen_mag_spec = self.build_linear_generator(temp_spec)
       elif self.generator_type == "interp+pix2pix":
         _temp_spec = tf.image.resize_images(x_mel_spec, 
-          [batch_size, self.subseq_len, 513, 1])
+          [self.subseq_len, 513])
         gen_mag_spec = self.build_linear_generator(_temp_spec)
       else:
         raise NotImplementedError()
