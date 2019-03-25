@@ -62,12 +62,12 @@ def train(fps, args):
   model(x_inverted_mag_spec, x_mag_spec)
 
   #Train
-  # with tf.train.MonitoredTrainingSession(
-  #     checkpoint_dir=args.train_dir,
-  #     save_checkpoint_secs=args.train_ckpt_every_nsecs,
-  #     save_summaries_secs=args.train_summary_every_nsecs) as sess:
-  #   while not sess.should_stop():
-  #     model.train_loop(sess)
+  with tf.train.MonitoredTrainingSession(
+      checkpoint_dir=args.train_dir,
+      save_checkpoint_secs=args.train_ckpt_every_nsecs,
+      save_summaries_secs=args.train_summary_every_nsecs) as sess:
+    while not sess.should_stop():
+      model.train_loop(sess)
 
 def eval(fps, args):
   raise NotImplementedError()
