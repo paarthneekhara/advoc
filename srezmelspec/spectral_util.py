@@ -1,5 +1,7 @@
 import advoc
 import tensorflow as tf
+import lws
+import numpy as np
 
 class SpectralUtil(object):
   NFFT = 1024
@@ -7,7 +9,7 @@ class SpectralUtil(object):
   FMIN = 125.
   FMAX = 7600.
   NMELS = 80
-  fs = 16000
+  fs = 22050
 
   def __init__(self):
     meltrans = advoc.spectral.create_mel_filterbank(
@@ -17,6 +19,7 @@ class SpectralUtil(object):
 
     self.meltrans = tf.constant(meltrans, dtype = 'float32')
     self.invmeltrans = tf.constant(invmeltrans, dtype = 'float32')
+    self.lws_processor = lws.lws(self.NFFT, self.NHOP, mode='speech', perfectrec=False)
 
   def mag_to_mel_linear_spec(self, mag_spec):
     linear_mel =  tf.expand_dims(
@@ -33,3 +36,8 @@ class SpectralUtil(object):
     mag_spec =  tf.expand_dims(
       tf.tensordot(mel_spec[:,:,:,0], transform_mat, axes = 1 ), -1)
     return mag_spec
+
+  def audio_from_mag_spec(self, mag_spec):
+    spec_lws = self.lws_processor.run_lws(mag_spec[:,:,0])
+    magspec_inv = self.lws_processor.istft(spec_lws)[:, np.newaxis, np.newaxis]
+    return magspec_inv

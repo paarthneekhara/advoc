@@ -55,19 +55,13 @@ def train(fps, args):
 
   # Create model
   spectral = SpectralUtil()
-  print("x_wav", x_wav)
-  print("x_mag_spec", x_mag_spec)
-  # model(x_wav, x_spec)
-
+  
   x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
 
-  # model(x_inverted_mag_spec, x_mag_spec)
-  print ("x_mel_spec", x_mel_spec)
-  print("x_inverted_mag_spec",  x_inverted_mag_spec)
   model(x_inverted_mag_spec, x_mag_spec)
 
-  # Train
+  #Train
   # with tf.train.MonitoredTrainingSession(
   #     checkpoint_dir=args.train_dir,
   #     save_checkpoint_secs=args.train_ckpt_every_nsecs,
