@@ -10,6 +10,7 @@ EPS = 1e-12
 class SrezMelSpec(Model):
   audio_fs = 22050
   subseq_len = 256
+  n_mels = 80
   ngf = 64
   ndf = 64
   gan_weight = 1. 
@@ -133,6 +134,7 @@ class SrezMelSpec(Model):
           if self.mode == Modes.TRAIN:
             output = tf.nn.dropout(output, keep_prob= 1 - dropout)
           else:
+            # use dropout in inference as well
             output = tf.nn.dropout(output, keep_prob= 1 - dropout)
         layers.append(output)
 

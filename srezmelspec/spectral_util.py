@@ -11,11 +11,15 @@ class SpectralUtil(object):
   NMELS = 80
   fs = 22050
 
-  def __init__(self):
+  def __init__(self, n_mels = 80):
+    self.NMELS = n_mels
     meltrans = advoc.spectral.create_mel_filterbank(
             self.fs, self.NFFT, fmin=self.FMIN, fmax=self.FMAX, n_mels=self.NMELS)
     invmeltrans = advoc.spectral.create_inverse_mel_filterbank(
             self.fs, self.NFFT, fmin=self.FMIN, fmax=self.FMAX, n_mels=self.NMELS)
+
+    self.invmeltrans_np = invmeltrans
+    self.meltrans_np = meltrans
 
     self.meltrans = tf.constant(meltrans, dtype = 'float32')
     self.invmeltrans = tf.constant(invmeltrans, dtype = 'float32')
@@ -43,3 +47,14 @@ class SpectralUtil(object):
     magspec_inv = self.lws_processor.istft(spec_lws)[:, np.newaxis, np.newaxis]
     magspec_inv = magspec_inv.astype('float32')
     return magspec_inv
+
+  def tacotron_mel_to_mag(self, X_mel_dbnorm):
+    norm_min_level_db = -100
+    norm_ref_level_db = 20
+    fs = self.fs
+    
+    X_mel_db = (X_mel_dbnorm * -norm_min_level_db) + norm_min_level_db
+    X_mel = np.power(10, (X_mel_db + norm_ref_level_db) / 20)
+    X_mag = np.dot(X_mel, self.invmeltrans_np.T)
+    return X_mag
+    

@@ -54,7 +54,7 @@ def train(fps, args):
       prefetch_gpu_num=0)
 
   # Create model
-  spectral = SpectralUtil()
+  spectral = SpectralUtil(n_mels = model.n_mels)
   
   x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
@@ -108,7 +108,7 @@ def eval(fps, args):
       prefetch_size=None,
       prefetch_gpu_num=None)
   
-  spectral = SpectralUtil()
+  spectral = SpectralUtil(n_mels = model.n_mels)
   x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
 
@@ -217,7 +217,7 @@ def infer(fps, args):
       prefetch_size=None,
       prefetch_gpu_num=0)
 
-  spectral = SpectralUtil()
+  spectral = SpectralUtil(n_mels = model.n_mels)
   x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
 
