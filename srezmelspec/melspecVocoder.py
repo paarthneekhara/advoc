@@ -17,13 +17,15 @@ def main():
   parser.add_argument('--output_dir', type=str)
   parser.add_argument('--meta_fp', type=str)
   parser.add_argument('--ckpt_fp', type=str)
+  parser.add_argument('--n_mels', type=int)
 
 
   parser.set_defaults( 
     input_file=None,
     output_dir=None,
     ckpt_fp=None,
-    meta_fp=None
+    meta_fp=None,
+    n_mels=20
     )
   args = parser.parse_args()
 
@@ -40,7 +42,7 @@ def main():
   gen_mag_spec = gen_graph.get_tensor_by_name('generator/decoder_1/strided_slice_1:0')
   x_mag_input = gen_graph.get_tensor_by_name('ExpandDims_1:0')
 
-  su = spectral_util.SpectralUtil()
+  su = spectral_util.SpectralUtil(n_mels = args.n_mels)
 
   spec_fps = glob.glob(os.path.join(args.input_dir, '*.npy'))
   for fidx, fp in enumerate(spec_fps):
