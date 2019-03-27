@@ -3,3 +3,6 @@ advoc.egg-info
 *.sh
 *.DS_Store
 *.wav
+*03_*
+.eggs
+*.ipynb_checkpoints*
