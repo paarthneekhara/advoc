@@ -1,12 +1,6 @@
-import pickle
-import time
-
 import numpy as np
 import tensorflow as tf
 
-from advoc.audioio import save_as_wav
-from advoc.loader import decode_extract_and_batch
-from advoc.spectral import r9y9_melspec_to_waveform
 from conv2d import MelspecGANGenerator, MelspecGANDiscriminator
 
 from util import feats_denorm
@@ -20,11 +14,12 @@ zgen = tf.random.normal([zgen_n, Z_DIM], dtype=tf.float32, name='samp_z')
 z = tf.placeholder(tf.float32, [None, Z_DIM], name='z')
 with tf.variable_scope('G'):
   G = MelspecGANGenerator()
-G_z = G(z, training=False)
+  G_z = G(z, training=False)
 G_z = feats_denorm(G_z)
 G_z = tf.identity(G_z, name='G_z')
 print(G_z)
 G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='G')
+print(G_vars)
 step = tf.train.get_or_create_global_step()
 saver = tf.train.Saver(var_list=G_vars + [step])
 
