@@ -25,7 +25,7 @@ def main():
     output_dir=None,
     ckpt_fp=None,
     meta_fp=None,
-    n_mels=20
+    n_mels=80
     )
   args = parser.parse_args()
 
