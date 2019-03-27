@@ -8,19 +8,6 @@ import advoc.spectral
 from srezModel import SrezMelSpec
 from spectral_util import SpectralUtil
 
-def magnitude_to_linear_mel():
-  NFFT = 1024
-  NHOP = 256
-  FMIN = 125.
-  FMAX = 7600.
-  NMELS = 80
-
-  meltrans = advoc.spectral.create_mel_filterbank(
-            fs, NFFT, fmin=FMIN, fmax=FMAX, n_mels=NMELS)
-  invmeltrans = advoc.spectral.create_inverse_mel_filterbank(
-            fs, NFFT, fmin=FMIN, fmax=FMAX, n_mels=NMELS)
-
-
 
 def train(fps, args):
   # Initialize model
@@ -39,7 +26,7 @@ def train(fps, args):
       subseq_len=model.subseq_len,
       audio_fs=model.audio_fs,
       audio_mono=True,
-      audio_normalize=False,
+      audio_normalize=args.audio_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
       extract_type='mag_spec',
@@ -47,14 +34,14 @@ def train(fps, args):
       repeat=True,
       shuffle=True,
       shuffle_buffer_size=512,
-      subseq_randomize_offset=True,
+      subseq_randomize_offset=args.subseq_randomize_offset,
       subseq_overlap_ratio=args.data_overlap_ratio,
       subseq_pad_end=True,
       prefetch_size=64 * 4,
       prefetch_gpu_num=0)
 
   # Create model
-  spectral = SpectralUtil(n_mels = model.n_mels)
+  spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
   
   x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
   x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
@@ -94,7 +81,7 @@ def eval(fps, args):
       subseq_len=model.subseq_len,
       audio_fs=model.audio_fs,
       audio_mono=True,
-      audio_normalize=False,
+      audio_normalize=args.audio_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
       extract_type='mag_spec',
@@ -203,7 +190,7 @@ def infer(fps, args):
       subseq_len= model.subseq_len,
       audio_fs=model.audio_fs,
       audio_mono=True,
-      audio_normalize=False,
+      audio_normalize=args.audio_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
       extract_type='mag_spec',
@@ -244,9 +231,10 @@ def infer(fps, args):
   target_audio = tf.py_func( spectral.audio_from_mag_spec, [x_mag_spec[0]], tf.float32, stateful=False)
   gen_audio = tf.py_func( spectral.audio_from_mag_spec, [gen_mag_spec[0]], tf.float32, stateful=False)
 
-  input_audio = tf.reshape(input_audio, [1, 66304, 1, 1] )
-  target_audio = tf.reshape(target_audio, [1, 66304, 1, 1] )
-  gen_audio = tf.reshape(gen_audio, [1, 66304, 1, 1] )
+  # dont know why i rehspae them this way. just following past convention.
+  input_audio = tf.reshape(input_audio, [1, -1, 1, 1] )
+  target_audio = tf.reshape(target_audio, [1, -1, 1, 1] )
+  gen_audio = tf.reshape(gen_audio, [1, -1, 1, 1] )
 
   summaries = [
     tf.summary.audio('infer_x_wav', x_wav[:, :, 0, :], model.audio_fs),
@@ -313,6 +301,8 @@ if __name__ == '__main__':
 
   parser.add_argument('--data_dir', type=str, required=True)
   parser.add_argument('--data_fastwav', dest='data_fastwav', action='store_true')
+  parser.add_argument('--audio_normalize', dest='audio_normalize', action='store_true')
+  parser.add_argument('--subseq_randomize_offset', dest='subseq_randomize_offset', action='store_true')
   parser.add_argument('--data_overlap_ratio', type=float)
   parser.add_argument('--model_overrides', type=str)
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
@@ -330,6 +320,8 @@ if __name__ == '__main__':
       train_dir=None,
       data_dir=None,
       data_fastwav=False,
+      audio_normalize=False,
+      subseq_randomize_offset=False,
       data_overlap_ratio=0.25,
       model_overrides=None,
       train_ckpt_every_nsecs=360,

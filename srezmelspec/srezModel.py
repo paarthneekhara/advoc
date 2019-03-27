@@ -21,7 +21,7 @@ class SrezMelSpec(Model):
   separable_conv = False
   use_batchnorm = True
   generator_type = "pix2pix" #pix2pix, linear, linear+pix2pix
-  spectral = SpectralUtil()
+
 
   def _discrim_conv(self, x, out_channels, stride):
     padded_input = tf.pad(x, [[0, 0], [1, 1], [1, 1], [0, 0]], mode="CONSTANT")
@@ -32,14 +32,14 @@ class SrezMelSpec(Model):
       padding="valid", 
       kernel_initializer=tf.random_normal_initializer(0, 0.02))
 
-  def _gen_conv(self, x, out_channels):
+  def _gen_conv(self, x, out_channels, strides = (2, 2)):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
     initializer = tf.random_normal_initializer(0, 0.02)
     if self.separable_conv:
       return tf.layers.separable_conv2d(x, 
         out_channels, 
         kernel_size=4, 
-        strides=(2, 2), 
+        strides=strides, 
         padding="same", 
         depthwise_initializer=initializer, 
         pointwise_initializer=initializer)
@@ -47,16 +47,16 @@ class SrezMelSpec(Model):
       return tf.layers.conv2d(x, 
         out_channels, 
         kernel_size=4, 
-        strides=(2, 2), 
+        strides=strides, 
         padding="same", 
         kernel_initializer=initializer)
 
-  def _gen_deconv(self, x, out_channels):
+  def _gen_deconv(self, x, out_channels, strides = (2, 2)):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
     initializer = tf.random_normal_initializer(0, 0.02)
     if self.separable_conv:
         _b, h, w, _c = x.shape
-        resized_input = tf.image.resize_images(x, [h * 2, w * 2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        resized_input = tf.image.resize_images(x, [h * strides[0], w * strides[1]], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
         return tf.layers.separable_conv2d(resized_input, 
           out_channels, kernel_size=4, 
           strides=(1, 1), padding="same", 
@@ -65,7 +65,7 @@ class SrezMelSpec(Model):
     else:
         return tf.layers.conv2d_transpose(x, 
           out_channels, kernel_size=4, 
-          strides=(2, 2), 
+          strides=strides, 
           padding="same", 
           kernel_initializer=initializer)
 
@@ -88,8 +88,11 @@ class SrezMelSpec(Model):
       return tf.maximum(alpha * inputs, inputs)
 
     layers = []
+    n_time = self.subseq_len
     with tf.variable_scope("encoder_1"):
       output = self._gen_conv(x[:,:,:,:], self.ngf)
+      n_time /= 2
+      print("Encoder", output)
       layers.append(output)
 
     layer_specs = [
@@ -101,12 +104,20 @@ class SrezMelSpec(Model):
       self.ngf * 8, # encoder_7: [batch, 4, 4, ngf * 8] => [batch, 2, 2, ngf * 8]
       self.ngf * 8, # encoder_8: [batch, 2, 2, ngf * 8] => [batch, 1, 1, ngf * 8]
     ]
+
+    n_stride1_layers = 0 # number of decoder layer
     for out_channels in layer_specs:
       with tf.variable_scope("encoder_{}".format(len(layers) + 1)):
         rectified = lrelu(layers[-1], 0.2)
         # [batch, in_height, in_width, in_channels] => [batch, in_height/2, in_width/2, out_channels]
-        convolved = self._gen_conv(rectified, out_channels)
+        if n_time > 1:
+          convolved = self._gen_conv(rectified, out_channels, strides = (2, 2))
+          n_time /= 2
+        else:
+          n_stride1_layers += 1
+          convolved = self._gen_conv(rectified, out_channels, strides = (1, 2))
         output = batchnorm(convolved)
+        print("Encoder", output)
         layers.append(output)
 
     layer_specs = [
@@ -128,7 +139,10 @@ class SrezMelSpec(Model):
         else:
           input = tf.concat([layers[-1][:,:,:-1,:], layers[skip_layer]], axis=3)
         rectified = tf.nn.relu(input)
-        output = self._gen_deconv(rectified, out_channels)
+        if decoder_layer < n_stride1_layers:
+          output = self._gen_deconv(rectified, out_channels, strides = (1, 2))
+        else:
+          output = self._gen_deconv(rectified, out_channels, strides = (2, 2))
         output = batchnorm(output)
         if dropout > 0.0:
           if self.mode == Modes.TRAIN:
@@ -136,6 +150,7 @@ class SrezMelSpec(Model):
           else:
             # use dropout in inference as well
             output = tf.nn.dropout(output, keep_prob= 1 - dropout)
+        print("Deocder", output)
         layers.append(output)
 
     # decoder_1: [batch, 128, 128, ngf * 2] => [batch, 256, 256, generator_outputs_channels]
@@ -193,6 +208,9 @@ class SrezMelSpec(Model):
     return layers[-1]
 
   def __call__(self, x, target, x_wav, x_mel_spec):
+    
+    self.spectral = SpectralUtil(n_mels = self.n_mels, fs = self.audio_fs)
+
     try:
       batch_size = int(x.get_shape()[0])
     except:
@@ -246,9 +264,9 @@ class SrezMelSpec(Model):
     target_audio = tf.py_func( self.spectral.audio_from_mag_spec, [target[0]], tf.float32, stateful=False)
     gen_audio = tf.py_func( self.spectral.audio_from_mag_spec, [gen_mag_spec[0]], tf.float32, stateful=False)
 
-    input_audio = tf.reshape(input_audio, [1, 66304, 1, 1] )
-    target_audio = tf.reshape(target_audio, [1, 66304, 1, 1] )
-    gen_audio = tf.reshape(gen_audio, [1, 66304, 1, 1] )
+    input_audio = tf.reshape(input_audio, [1, -1, 1, 1] )
+    target_audio = tf.reshape(target_audio, [1, -1, 1, 1] )
+    gen_audio = tf.reshape(gen_audio, [1, -1, 1, 1] )
     
     
     tf.summary.audio('input_audio', input_audio[:, :, 0, :], self.audio_fs)

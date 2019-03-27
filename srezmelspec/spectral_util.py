@@ -11,8 +11,9 @@ class SpectralUtil(object):
   NMELS = 80
   fs = 22050
 
-  def __init__(self, n_mels = 80):
+  def __init__(self, n_mels = 80, fs = 22050):
     self.NMELS = n_mels
+    self.fs = fs
     meltrans = advoc.spectral.create_mel_filterbank(
             self.fs, self.NFFT, fmin=self.FMIN, fmax=self.FMAX, n_mels=self.NMELS)
     invmeltrans = advoc.spectral.create_inverse_mel_filterbank(
@@ -57,4 +58,3 @@ class SpectralUtil(object):
     X_mel = np.power(10, (X_mel_db + norm_ref_level_db) / 20)
     X_mag = np.dot(X_mel, self.invmeltrans_np.T)
     return X_mag
-    
