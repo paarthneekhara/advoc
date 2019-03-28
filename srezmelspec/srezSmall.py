@@ -135,7 +135,7 @@ class SrezMelSpec(Model):
     ]
 
     layer_specs = layer_specs[dec_layer_si:]
-    
+    num_encoder_layers = len(layers)
     for decoder_layer, (out_channels, dropout) in enumerate(layer_specs):
       skip_layer = num_encoder_layers - decoder_layer - 1
       with tf.variable_scope("decoder_{}".format(skip_layer + 1)):
