@@ -75,7 +75,7 @@ def main():
     gen_mag = gen_mag[0:x_mag_original_length]
 
     if args.heuristic == 'lws':
-      _gen_audio = spectral.magspec_to_waveform_lws(gen_mag, 1024, 256)
+      _gen_audio = spectral.magspec_to_waveform_lws(gen_mag.astype('float64'), 1024, 256)
     elif args.heuristic == 'gl':
       _gen_audio = spectral.magspec_to_waveform_griffin_lim(gen_mag, 1024, 256)
     else:
