@@ -72,7 +72,7 @@ def main():
 
     if args.heuristic == 'lws':
       _gen_audio = spectral.magspec_to_waveform_lws(gen_mag, 1024, 256)
-    elif args.heuristic == 'gl'::
+    elif args.heuristic == 'gl':
       _gen_audio = spectral.magspec_to_waveform_griffin_lim(gen_mag, 1024, 256)
     else:
       raise NotImplementedError()
