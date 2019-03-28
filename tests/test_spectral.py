@@ -157,13 +157,55 @@ class TestSpectralModule(unittest.TestCase):
     self.assertEqual(self.wav_mono_22.shape, (82432, 1, 1), 'invalid shape')
 
     melspec = spectral.waveform_to_r9y9_melspec(self.wav_mono_22)
-    inv_melspec = spectral.r9y9_melspec_to_waveform(melspec, waveform_len=82432)
-    self.assertEqual(inv_melspec.shape, self.wav_mono_22.shape, 'invalid shape')
+    inv_melspec_lws = spectral.r9y9_melspec_to_waveform(melspec, phase_estimation='lws', waveform_len=82432)
+    self.assertEqual(inv_melspec_lws.shape, self.wav_mono_22.shape, 'invalid shape')
+
+    np.random.seed(0)
+    inv_melspec_gl10 = spectral.r9y9_melspec_to_waveform(melspec, phase_estimation='gl10', waveform_len=82432)
+    self.assertEqual(inv_melspec_gl10.shape, self.wav_mono_22.shape, 'invalid shape')
 
     x_env = np.abs(sphilbert(self.wav_mono_22[:, 0, 0]))
-    x_inv_env = np.abs(sphilbert(inv_melspec[:, 0, 0]))
-    env_l1 = np.mean(np.abs(x_env - x_inv_env))
-    self.assertAlmostEqual(env_l1, 0.01737, 4, 'bad envelope after inverse')
+
+    x_lws_env = np.abs(sphilbert(inv_melspec_lws[:, 0, 0]))
+    env_l1 = np.mean(np.abs(x_env - x_lws_env))
+    self.assertAlmostEqual(env_l1, 0.01737, 4, 'bad envelope after lws inverse')
+
+    x_gl10_env = np.abs(sphilbert(inv_melspec_gl10[:, 0, 0]))
+    env_l1 = np.mean(np.abs(x_env - x_gl10_env))
+    self.assertAlmostEqual(env_l1, 0.01686, 4, 'bad envelope after gl10 inverse')
+
+
+  def test_magspec_to_waveform(self):
+    x = self.wav_mono_22
+    self.assertEqual(x.shape, (82432, 1, 1), 'invalid shape')
+    self.assertEqual(x.dtype, np.float32)
+
+    X_mag = spectral.stft(x, 1024, 256, pad_end=False)
+    self.assertEqual(X_mag.shape, (319, 513, 1), 'invalid shape')
+
+    np.random.seed(0)
+    x_gl0 = spectral.magspec_to_waveform_griffin_lim(X_mag, 1024, 256, ngl=0)
+    x_gl60 = spectral.magspec_to_waveform_griffin_lim(X_mag, 1024, 256, ngl=60)
+    x_gl100 = spectral.magspec_to_waveform_griffin_lim(X_mag, 1024, 256, ngl=100)
+    x_lws = spectral.magspec_to_waveform_lws(X_mag, 1024, 256)
+
+    self.assertEqual(x_gl0.shape, (82432, 1, 1), 'invalid shape')
+    self.assertEqual(x_gl0.dtype, np.float32, 'invalid dtype')
+    self.assertEqual(x_gl60.shape, (82432, 1, 1), 'invalid shape')
+    self.assertEqual(x_gl0.dtype, np.float32, 'invalid dtype')
+    self.assertEqual(x_gl100.shape, (82432, 1, 1), 'invalid shape')
+    self.assertEqual(x_gl100.dtype, np.float32, 'invalid dtype')
+    self.assertEqual(x_lws.shape, (82432, 1, 1), 'invalid shape')
+    self.assertEqual(x_lws.dtype, np.float32, 'invalid dtype')
+
+    x_gl0_l1 = np.mean(np.abs(x_gl0 - x))
+    self.assertAlmostEqual(x_gl0_l1, 0.0232695210048, 8, 'bad l1 after GL0')
+    x_gl60_l1 = np.mean(np.abs(x_gl60 - x))
+    self.assertAlmostEqual(x_gl60_l1, 0.0310892466788, 8, 'bad l1 after GL60')
+    x_gl100_l1 = np.mean(np.abs(x_gl100 - x))
+    self.assertAlmostEqual(x_gl100_l1, 0.0281844304033, 8, 'bad l1 after GL100')
+    x_lws_l1 = np.mean(np.abs(x_lws - x))
+    self.assertAlmostEqual(x_lws_l1, 0.0004236908353, 8, 'bad l1 after LWS')
 
 
 if __name__ == '__main__':
