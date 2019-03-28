@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import lws
+from advoc import audioio
 from advoc import spectral
 from model import Modes
 from srezModel import SrezMelSpec
@@ -18,14 +19,15 @@ def main():
   parser.add_argument('--meta_fp', type=str)
   parser.add_argument('--ckpt_fp', type=str)
   parser.add_argument('--n_mels', type=int)
-
+  parser.add_argument('--fs', type=int)
 
   parser.set_defaults( 
     input_file=None,
     output_dir=None,
     ckpt_fp=None,
     meta_fp=None,
-    n_mels=80
+    n_mels=80,
+    fs=22050
     )
   args = parser.parse_args()
 
@@ -42,7 +44,7 @@ def main():
   gen_mag_spec = gen_graph.get_tensor_by_name('generator/decoder_1/strided_slice_1:0')
   x_mag_input = gen_graph.get_tensor_by_name('ExpandDims_1:0')
 
-  su = spectral_util.SpectralUtil(n_mels = args.n_mels)
+  su = spectral_util.SpectralUtil(n_mels = args.n_mels, fs = args.fs)
 
   spec_fps = glob.glob(os.path.join(args.input_dir, '*.npy'))
   for fidx, fp in enumerate(spec_fps):
@@ -65,12 +67,12 @@ def main():
     heur_mag = np.concatenate(heuristic_mags, axis = 0)
 
     _gen_audio = su.audio_from_mag_spec(gen_mag)
-    _gen_audio = _gen_audio[:x_mag_original_length * 256, 0, 0]
+    _gen_audio = _gen_audio[:x_mag_original_length * 256, :, :]
     
     fn = fp.split("/")[-1][:-3] + "wav"
     output_file_name = os.path.join(args.output_dir, fn)
     print("Writing", fidx, output_file_name)
-    scipy.io.wavfile.write(output_file_name, 22050, _gen_audio)
+    audioio.save_as_wav(output_file_name, args.fs, _gen_audio)
     
 
   
