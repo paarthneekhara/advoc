@@ -12,21 +12,22 @@ from advoc.spectral import melspec_to_waveform
 spec_dir = sys.argv[1]
 fs = float(sys.argv[2])
 wavlen = int(sys.argv[3])
+phase_estimation = sys.argv[4]
 
-lws_dir = spec_dir.replace('Spectrogram', 'Waveform')
-if lws_dir[-1] == '/':
-  lws_dir = lws_dir[:-1]
-lws_dir += '_LWS'
+heuristic_dir = spec_dir.replace('Spectrogram', 'Waveform')
+if heuristic_dir[-1] == '/':
+  heuristic_dir = heuristic_dir[:-1]
+heuristic_dir += '_' + phase_estimation.upper()
 
-if os.path.isdir(lws_dir):
-  shutil.rmtree(lws_dir)
-os.makedirs(lws_dir)
+if os.path.isdir(heuristic_dir):
+  shutil.rmtree(heuristic_dir)
+os.makedirs(heuristic_dir)
 
 spec_fps = glob.glob(os.path.join(spec_dir, '*.npy'))
 for spec_fp in tqdm(spec_fps):
   spec_fn = os.path.split(spec_fp)[1].split('.')[0]
   m = np.load(spec_fp).astype(np.float64)
-  w = melspec_to_waveform(m, fs, 1024, 256, waveform_len=wavlen)
+  w = melspec_to_waveform(m, fs, 1024, 256, phase_estimation=phase_estimation, waveform_len=wavlen)
   assert w.shape[0] == wavlen
-  wav_fp = os.path.join(lws_dir, spec_fn + '.wav')
+  wav_fp = os.path.join(heuristic_dir, spec_fn + '.wav')
   save_as_wav(wav_fp, int(fs), w)
