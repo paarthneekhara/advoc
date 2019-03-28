@@ -12,7 +12,7 @@ from spectral_util import SpectralUtil
 
 def train(fps, args):
   # Initialize model
-  if args.model_type == "regular"
+  if args.model_type == "regular":
     model = SrezMelSpec(Modes.TRAIN)
   elif args.model_type == "small":
     model = SrezMelSpecSmall(Modes.TRAIN)
@@ -75,10 +75,10 @@ def eval(fps, args):
   if not os.path.isdir(eval_dir):
     os.makedirs(eval_dir)
   
-  if args.model_type == "regular"
-    model = SrezMelSpec(Modes.TRAIN)
+  if args.model_type == "regular":
+    model = SrezMelSpec(Modes.EVAL)
   elif args.model_type == "small":
-    model = SrezMelSpecSmall(Modes.TRAIN)
+    model = SrezMelSpecSmall(Modes.EVAL)
   else:
     raise NotImplementedError()
 
@@ -190,10 +190,10 @@ def infer(fps, args):
   if not os.path.isdir(infer_dir):
     os.makedirs(infer_dir)
 
-  if args.model_type == "regular"
-    model = SrezMelSpec(Modes.TRAIN)
+  if args.model_type == "regular":
+    model = SrezMelSpec(Modes.INFER)
   elif args.model_type == "small":
-    model = SrezMelSpecSmall(Modes.TRAIN)
+    model = SrezMelSpecSmall(Modes.INFER)
   else:
     raise NotImplementedError()
 
