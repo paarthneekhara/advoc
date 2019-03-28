@@ -51,6 +51,7 @@ def main():
   su = spectral_util.SpectralUtil(n_mels = args.n_mels, fs = args.fs)
 
   spec_fps = glob.glob(os.path.join(args.input_dir, '*.npy'))
+  subseq_len = args.subseq_len
   for fidx, fp in enumerate(spec_fps):
     _mel_spec = np.load(fp)[:,:,0]
     X_mag = su.tacotron_mel_to_mag(_mel_spec)
