@@ -134,7 +134,7 @@ class SrezMelSpec(Model):
         (self.ngf, 0.0),       # decoder_2: [batch, 64, 64, ngf * 2 * 2] => [batch, 128, 128, ngf * 2]
     ]
 
-    layer_specs = [dec_layer_si:]
+    layer_specs = layer_specs[dec_layer_si:]
     
     for decoder_layer, (out_channels, dropout) in enumerate(layer_specs):
       skip_layer = num_encoder_layers - decoder_layer - 1
