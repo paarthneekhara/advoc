@@ -10,9 +10,8 @@ from advoc.audioio import save_as_wav
 from advoc.spectral import melspec_to_waveform
 
 spec_dir = sys.argv[1]
-fs = float(sys.argv[2])
-wavlen = int(sys.argv[3])
-phase_estimation = sys.argv[4]
+phase_estimation = sys.argv[2]
+fs = float(sys.argv[3])
 
 heuristic_dir = spec_dir.replace('Spectrogram', 'Waveform')
 if heuristic_dir[-1] == '/':
@@ -27,7 +26,6 @@ spec_fps = glob.glob(os.path.join(spec_dir, '*.npy'))
 for spec_fp in tqdm(spec_fps):
   spec_fn = os.path.split(spec_fp)[1].split('.')[0]
   m = np.load(spec_fp).astype(np.float64)
-  w = melspec_to_waveform(m, fs, 1024, 256, phase_estimation=phase_estimation, waveform_len=wavlen)
-  assert w.shape[0] == wavlen
+  w = melspec_to_waveform(m, fs, 1024, 256, phase_estimation=phase_estimation)
   wav_fp = os.path.join(heuristic_dir, spec_fn + '.wav')
   save_as_wav(wav_fp, int(fs), w)
