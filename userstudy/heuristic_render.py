@@ -29,3 +29,6 @@ for spec_fp in tqdm(spec_fps):
   w = melspec_to_waveform(m, fs, 1024, 256, phase_estimation=phase_estimation)
   wav_fp = os.path.join(heuristic_dir, spec_fn + '.wav')
   save_as_wav(wav_fp, int(fs), w)
+  os.chmod(wav_fp, 0o555)
+
+os.chmod(heuristic_dir, 0o555)
