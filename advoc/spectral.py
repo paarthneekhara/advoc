@@ -291,35 +291,79 @@ def waveform_to_r9y9_melspec_tf(x, fs=22050):
       nhop=256)
 
 
-def r9y9_melspec_to_waveform(X_mel_dbnorm, fs=22050, waveform_len=None):
-  """Approximately inverts unofficial mel spectrogram to waveform.
+def magspec_to_waveform_griffin_lim(X_mag, nfft, nhop, ngl=60):
+  nsamps, nbins, nch = X_mag.shape
+  if nch != 1:
+    raise NotImplementedError('Can only invert monaural signals')
+  X_mag = X_mag[:, :, 0]
+
+  lws_proc = lws.lws(nfft, nhop, mode='speech', perfectrec=False)
+  angles = np.exp(2j * np.pi * np.random.rand(*X_mag.shape))
+  X_complex = np.abs(X_mag).astype(np.complex128)
+
+  x_gl = lws_proc.istft(X_complex * angles)
+  for i in range(ngl):
+      angles = np.exp(1j * np.angle(lws_proc.stft(x_gl)))
+      x_gl = lws_proc.istft(X_complex * angles)
+
+  x_gl = x_gl[:, np.newaxis, np.newaxis].astype(np.float32)
+
+  return x_gl
+
+
+def magspec_to_waveform_lws(X_mag, nfft, nhop):
+  nsamps, nbins, nch = X_mag.shape
+  if nch != 1:
+    raise NotImplementedError('Can only invert monaural signals')
+  X_mag = X_mag[:, :, 0]
+
+  lws_proc = lws.lws(nfft, nhop, mode='speech', perfectrec=False)
+  X_lws = lws_proc.run_lws(X_mag)
+  x_lws = lws_proc.istft(X_lws)
+
+  x_lws = x_lws[:, np.newaxis, np.newaxis].astype(np.float32)
+
+  return x_lws
+
+
+# NOTE: nfft and hop are configured for fs=20480
+def melspec_to_waveform(
+    X_mel_dbnorm,
+    fs,
+    nfft,
+    nhop,
+    mel_min=125,
+    mel_max=7600,
+    norm_min_level_db=-100,
+    norm_ref_level_db=20,
+    phase_estimation='lws',
+    waveform_len=None):
+  """Approximately inverts mel spectrogram to waveform.
 
   Args:
-    X_mel_dbnorm: nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
-    fs: Output sample rate (should be 22050 to be the same as r9y9).
-    waveform_len: If specified, pad or trim output waveform to be this long.
+    X_mel: nd-array dtype float64 of shape [?, mel_num_bins, num_ch].
+    fs: Sample rate of waveform.
+    nfft: FFT size.
+    nhop: Window size.
+    mel_min: Minimum frequency for mel transform.
+    mel_max: Maximum frequency for mel transform.
+    norm_allow_clipping: If False, throws error if data is clipped during norm.
+    norm_min_level_db: Minimum dB level.
+    norm_ref_level_db: Maximum dB level (clips between this and 0).
+    phase_estimation: One of 'lws' (local weighted sums) or 'gl60' (Griffin-Lim)
+    waveform_len: If specified, pad or clip output to this length.
 
   Returns:
-    nd-array dtype float32 of shape [?, 1, 1].
+    nd-array dtype float32 of shape [waveform_len, 1, num_ch] containing the features.
   """
   if X_mel_dbnorm.dtype != np.float64:
     raise ValueError()
 
-  nsamps, nfeats, nch = X_mel_dbnorm.shape
-  if nfeats != 80:
-    raise ValueError()
+  nsamps, mel_num_bins, nch = X_mel_dbnorm.shape
   if nch != 1:
     raise NotImplementedError('Can only invert monaural signals')
   X_mel_dbnorm = X_mel_dbnorm[:, :, 0]
 
-  norm_min_level_db = -100
-  norm_ref_level_db = 20
-  nfft = 1024
-  nhop = 256
-  mel_min = 125
-  mel_max = 7600
-  mel_num_bins = 80
-  
   X_mel_db = (X_mel_dbnorm * -norm_min_level_db) + norm_min_level_db
   X_mel = np.power(10, (X_mel_db + norm_ref_level_db) / 20)
 
@@ -328,17 +372,49 @@ def r9y9_melspec_to_waveform(X_mel_dbnorm, fs=22050, waveform_len=None):
   X_mag = np.dot(X_mel, inv_mel_filterbank.T)
   X_mag = np.maximum(0., X_mag)
 
-  # TODO: Add argument for Griffin-Lim instead of LWS.
-  lws_processor = lws.lws(nfft, nhop, mode='speech', perfectrec=False)
-  X_lws = lws_processor.run_lws(X_mag)
-  x_lws = lws_processor.istft(X_lws)
+  X_mag = X_mag[:, :, np.newaxis]
+  if phase_estimation == 'lws':
+    x = magspec_to_waveform_lws(X_mag, nfft, nhop)
+  elif phase_estimation[:2] == 'gl':
+    try:
+      ngl = int(phase_estimation[2:])
+    except:
+      raise ValueError()
+    x = magspec_to_waveform_griffin_lim(X_mag, nfft, nhop, ngl)
+  else:
+    raise ValueError()
 
   if waveform_len is not None:
-    x_lws_len = x_lws.shape[0]
-    if x_lws_len < waveform_len:
-      x_lws = np.pad(x_lws, [[0, waveform_len - x_lws_len]], 'constant')
+    x_len = x.shape[0]
+    if x_len < waveform_len:
+      x = np.pad(x, [[0, waveform_len - x_len], [0, 0], [0, 0]], 'constant')
       pass
-    elif x_lws_len > waveform_len:
-      x_lws = x_lws[:waveform_len]
+    elif x_len > waveform_len:
+      x = x[:waveform_len]
 
-  return x_lws[:, np.newaxis, np.newaxis].astype(np.float32)
+  return x.astype(np.float32)
+
+
+def r9y9_melspec_to_waveform(
+    X_mel_dbnorm,
+    fs=22050,
+    phase_estimation='lws',
+    waveform_len=None):
+  """Approximately inverts unofficial mel spectrogram to waveform.
+
+  Args:
+    X_mel_dbnorm: nd-array dtype float64 of shape [?, 80, 1] at 86.13Hz.
+    fs: Output sample rate (should be 22050 to be the same as r9y9).
+    phase_estimation: One of 'lws' (local weighted sums) or 'gl60' (Griffin-Lim)
+    waveform_len: If specified, pad or trim output waveform to be this long.
+
+  Returns:
+    nd-array dtype float32 of shape [?, 1, 1].
+  """
+  return melspec_to_waveform(
+      X_mel_dbnorm,
+      fs=fs,
+      nfft=1024,
+      nhop=256,
+      phase_estimation=phase_estimation,
+      waveform_len=waveform_len)

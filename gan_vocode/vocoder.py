@@ -72,7 +72,7 @@ def main():
         gen_audios.append(_gen_audio)
       
       gen_audio = np.concatenate(gen_audios, axis = 1)
-      gen_audio = gen_audio[:,0:original_length*model.subseq_len,:,:]
+      gen_audio = gen_audio[:,0:original_length*256,:,:]
       fn = fp.split("/")[-1][:-3] + "wav"
       output_file_name = os.path.join(args.output_dir, fn)
       print("Writing", fidx, output_file_name)

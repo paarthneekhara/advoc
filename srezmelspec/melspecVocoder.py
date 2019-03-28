@@ -18,6 +18,7 @@ def main():
   parser.add_argument('--output_dir', type=str)
   parser.add_argument('--meta_fp', type=str)
   parser.add_argument('--ckpt_fp', type=str)
+  parser.add_argument('--heuristic', type=str)
   parser.add_argument('--n_mels', type=int)
   parser.add_argument('--fs', type=int)
 
@@ -26,6 +27,7 @@ def main():
     output_dir=None,
     ckpt_fp=None,
     meta_fp=None,
+    heuristic="lws",
     n_mels=80,
     fs=22050
     )
@@ -67,6 +69,14 @@ def main():
     heur_mag = np.concatenate(heuristic_mags, axis = 0)
 
     _gen_audio = su.audio_from_mag_spec(gen_mag)
+
+    if args.heuristic == 'lws':
+      _gen_audio = spectral.magspec_to_waveform_lws(gen_mag, 1024, 256)
+    elif args.heuristic == 'gl'::
+      _gen_audio = spectral.magspec_to_waveform_griffin_lim(gen_mag, 1024, 256)
+    else:
+      raise NotImplementedError()
+
     _gen_audio = _gen_audio[:x_mag_original_length * 256, :, :]
     
     fn = fp.split("/")[-1][:-3] + "wav"
