@@ -6,13 +6,19 @@ import numpy as np
 import time
 import advoc.spectral
 from srezModel import SrezMelSpec
+from srezSmall import SrezMelSpec as SrezMelSpecSmall
 from spectral_util import SpectralUtil
 
 
 def train(fps, args):
   # Initialize model
-  
-  model = SrezMelSpec(Modes.TRAIN)
+  if args.model_type == "regular"
+    model = SrezMelSpec(Modes.TRAIN)
+  elif args.model_type == "small":
+    model = SrezMelSpecSmall(Modes.TRAIN)
+  else:
+    raise NotImplementedError()
+
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
   print(summary)
@@ -68,7 +74,14 @@ def eval(fps, args):
     eval_dir = os.path.join(args.train_dir, 'eval_valid')
   if not os.path.isdir(eval_dir):
     os.makedirs(eval_dir)
-  model = SrezMelSpec(Modes.TRAIN)
+  
+  if args.model_type == "regular"
+    model = SrezMelSpec(Modes.TRAIN)
+  elif args.model_type == "small":
+    model = SrezMelSpecSmall(Modes.TRAIN)
+  else:
+    raise NotImplementedError()
+
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
   print(summary)
@@ -177,7 +190,13 @@ def infer(fps, args):
   if not os.path.isdir(infer_dir):
     os.makedirs(infer_dir)
 
-  model = SrezMelSpec(Modes.INFER)
+  if args.model_type == "regular"
+    model = SrezMelSpec(Modes.TRAIN)
+  elif args.model_type == "small":
+    model = SrezMelSpecSmall(Modes.TRAIN)
+  else:
+    raise NotImplementedError()
+
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
   print(summary)
@@ -298,7 +317,7 @@ if __name__ == '__main__':
 
   parser.add_argument('mode', type=str, choices=['train', 'eval', 'infer'])
   parser.add_argument('train_dir', type=str)
-
+  parser.add_argument('--model_type', type=str, choices=['regular', 'small'])
   parser.add_argument('--data_dir', type=str, required=True)
   parser.add_argument('--data_fastwav', dest='data_fastwav', action='store_true')
   parser.add_argument('--audio_normalize', dest='audio_normalize', action='store_true')
@@ -318,6 +337,7 @@ if __name__ == '__main__':
   parser.set_defaults(
       mode=None,
       train_dir=None,
+      model_type="regular",
       data_dir=None,
       data_fastwav=False,
       audio_normalize=False,
