@@ -20,6 +20,7 @@ class SrezMelSpec(Model):
   use_adversarial = True #Train as a GAN or not
   separable_conv = False
   use_batchnorm = True
+  num_enc_layers = 7
   generator_type = "pix2pix" #pix2pix, linear, linear+pix2pix
 
 
@@ -100,7 +101,13 @@ class SrezMelSpec(Model):
       self.ngf * 4, # encoder_3: [batch, 64, 64, ngf * 2] => [batch, 32, 32, ngf * 4]
       self.ngf * 8, # encoder_4: [batch, 32, 32, ngf * 4] => [batch, 16, 16, ngf * 8]
       self.ngf * 8, # encoder_5: [batch, 16, 16, ngf * 8] => [batch, 8, 8, ngf * 8]
+      self.ngf * 8, # encoder_6: [batch, 8, 8, ngf * 8] => [batch, 4, 4, ngf * 8]
+      self.ngf * 8, # encoder_7: [batch, 4, 4, ngf * 8] => [batch, 2, 2, ngf * 8]
+      self.ngf * 8, # encoder_8: [batch, 2, 2, ngf * 8] => [batch, 1, 1, ngf * 8]
     ]
+
+    dec_layer_si = len(layer_specs) - self.num_enc_layers
+    layer_specs = layer_specs[:self.num_enc_layers]
 
     n_stride1_layers = 0 # number of decoder layer
     for out_channels in layer_specs:
@@ -118,13 +125,17 @@ class SrezMelSpec(Model):
         layers.append(output)
 
     layer_specs = [
-        (self.ngf * 8, 0.0),   # decoder_5: [batch, 8, 8, ngf * 8 * 2] => [batch, 16, 16, ngf * 8 * 2]
-        (self.ngf * 4, 0.0),   # decoder_4: [batch, 16, 16, ngf * 8 * 2] => [batch, 32, 32, ngf * 4 * 2]
+        (self.ngf * 8, 0.5),   # decoder_8: [batch, 1, 1, ngf * 8] => [batch, 2, 2, ngf * 8 * 2]
+        (self.ngf * 8, 0.5),   # decoder_7: [batch, 2, 2, ngf * 8 * 2] => [batch, 4, 4, ngf * 8 * 2]
+        (self.ngf * 8, 0.5),   # decoder_6: [batch, 4, 4, ngf * 8 * 2] => [batch, 8, 8, ngf * 8 * 2]
+        (self.ngf * 8, 0.5),   # decoder_5: [batch, 8, 8, ngf * 8 * 2] => [batch, 16, 16, ngf * 8 * 2]
+        (self.ngf * 4, 0.5),   # decoder_4: [batch, 16, 16, ngf * 8 * 2] => [batch, 32, 32, ngf * 4 * 2]
         (self.ngf * 2, 0.0),   # decoder_3: [batch, 32, 32, ngf * 4 * 2] => [batch, 64, 64, ngf * 2 * 2]
         (self.ngf, 0.0),       # decoder_2: [batch, 64, 64, ngf * 2 * 2] => [batch, 128, 128, ngf * 2]
     ]
 
-    num_encoder_layers = len(layers)
+    layer_specs = [dec_layer_si:]
+    
     for decoder_layer, (out_channels, dropout) in enumerate(layer_specs):
       skip_layer = num_encoder_layers - decoder_layer - 1
       with tf.variable_scope("decoder_{}".format(skip_layer + 1)):
