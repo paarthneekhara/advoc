@@ -34,6 +34,13 @@ input[type=radio] {{
 audio {{
     width: 300px;
 }}
+
+input[type=submit] {{
+    margin-top: 20px;
+    width: 20em;
+    height: 2em;
+}}
+
 </style>
 
 <html>
@@ -45,7 +52,7 @@ audio {{
 <p>These recordings will all be of the same sentence but differ in subtle ways.</p>
 <p><b>Feel free to listen to each recording as many times as you like and update your scores as you compare the methods.</b></p>
 
-<form>
+<div class="form-group">
 
 <table>
 	<tbody>
@@ -61,7 +68,9 @@ audio {{
 	</tbody>
 </table>
 
-</form>
+<input type="submit">
+
+</div>
 
 </html>
 """
@@ -69,11 +78,11 @@ audio {{
 ROW_TEMPL = """
 		<tr>
 			<td><audio controls=""><source src="${{recording_{i}_url}}" type="audio/mpeg"/></audio></td>
-			<td><input type="radio" name="recording_{i}_rating" value="1"></td>
-			<td><input type="radio" name="recording_{i}_rating" value="2"></td>
-			<td><input type="radio" name="recording_{i}_rating" value="3"></td>
-			<td><input type="radio" name="recording_{i}_rating" value="4"></td>
-			<td><input type="radio" name="recording_{i}_rating" value="5"></td>
+			<td><input class="form-control" type="radio" required="" name="recording_{i}_rating" value="1"></td>
+			<td><input class="form-control" type="radio" required="" name="recording_{i}_rating" value="2"></td>
+			<td><input class="form-control" type="radio" required="" name="recording_{i}_rating" value="3"></td>
+			<td><input class="form-control" type="radio" required="" name="recording_{i}_rating" value="4"></td>
+			<td><input class="form-control" type="radio" required="" name="recording_{i}_rating" value="5"></td>
 		</tr>
 """
 
