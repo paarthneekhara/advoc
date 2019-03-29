@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, Counter
 import csv
 import sys
 import numpy as np
@@ -22,27 +22,31 @@ for uuid, method in uuid_to_method.items():
   method_to_uuids[method].append(uuid)
 
 # Load results
-uuid_to_ratings = defaultdict(list)
-worker_to_avg_seconds = {}
+uuid_to_wids_ratings = defaultdict(list)
+wid_to_count = Counter()
+wid_to_avg_seconds = {}
 with open(results_fp, 'r') as f:
   reader = csv.DictReader(f)
   for row in reader:
+    wid = row['WorkerId']
+    wid_to_count[wid] += 1
+    wid_approval_rate = row['LifetimeApprovalRate']
+    wid_seconds = row['WorkTimeInSeconds']
+
     uuid = row['Input.audio_url'].split('/')[-1].split('.')[0]
     answer = row['Answer.audio-naturalness.label']
-    uuid_to_ratings[uuid].append(ANSWER_TO_INT[answer])
+    uuid_to_wids_ratings[uuid].append((wid, ANSWER_TO_INT[answer]))
 
-    worker_id = row['WorkerId']
-    worker_approval_rate = row['LifetimeApprovalRate']
-    worker_seconds = row['WorkTimeInSeconds']
-
-    print(worker_id, worker_seconds, worker_approval_rate)
+print(wid_to_count)
 
 # Print n, scores, 95% confidence intervals
 for method, uuids in method_to_uuids.items():
   scores = []
   for uuid in uuids:
-    if uuid in uuid_to_ratings:
-      scores.extend(uuid_to_ratings[uuid])
+    if uuid in uuid_to_wids_ratings:
+      wids_ratings = uuid_to_wids_ratings[uuid]
+      for wid, rating in wids_ratings:
+        scores.append(rating)
 
   mean = np.mean(scores)
   std = np.std(scores)
