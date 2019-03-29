@@ -4,11 +4,12 @@ import random
 import shutil
 import uuid
 
-name = 'userstudy1'
-#waveform_dir = '/data2/advoc/userstudy/Waveforms'
-waveform_dir = '/home/cdonahue/nuuserstudy/Waveforms'
-study_dir = './{}'.format(name)
-url_templ = 'http://deepyeti.ucsd.edu/cdonahue/advocuserstudy/{}/wavs/{{}}.wav'.format(name)
+name = '00_userstudy_pilot'
+waveform_dir = '/data2/advoc/userstudy/Waveforms'
+#waveform_dir = '/home/cdonahue/nuuserstudy/Waveforms'
+#study_dir = './{}'.format(name)
+study_dir = '/data2/advoc/turkhits/{}'.format(name)
+url_templ = 'http://deepyeti.ucsd.edu/cdonahue/advocturkhits/{}/wavs/{{}}.wav'.format(name)
 
 methods = [
     'LJSpeechTest_Real_Original',
