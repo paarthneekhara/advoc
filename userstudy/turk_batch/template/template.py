@@ -42,7 +42,8 @@ audio {{
 
 <p><b>Please use headphones in a quiet environment if possible.</b></p>
 <p>You will be presented a batch of recordings and asked to rate each of their naturalness.</p>
-<p>Feel free to listen to each recording as many times as you like and update your scores as you compare the methods.</p>
+<p>These recordings will all be of the same sentence but differ in subtle ways.</p>
+<p><b>Feel free to listen to each recording as many times as you like and update your scores as you compare the methods.</b></p>
 
 <form>
 
