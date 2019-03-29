@@ -46,5 +46,6 @@ for method, uuids in method_to_uuids.items():
 
   mean = np.mean(scores)
   std = np.std(scores)
+  count = len(scores)
   print(method)
-  print(len(scores), mean, 1.96 * std)
+  print(len(scores), mean, 1.96 * std / np.sqrt(float(count)))
