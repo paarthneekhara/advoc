@@ -52,12 +52,12 @@ def main():
   gan_saver = tf.train.Saver(var_list=G_vars + [step], max_to_keep=1)
 
   import time
-  start = time.time()
+  
   with tf.Session() as sess:
     print("Restoring")
     gan_saver.restore(sess, args.ckpt_fp)
     print("Restored")
-
+    start = time.time()
     spec_fps = glob.glob(os.path.join(args.input_dir, '*.npy'))
     for fidx, fp in enumerate(spec_fps):
       _mel_spec = np.load(fp)[:,:,0]
