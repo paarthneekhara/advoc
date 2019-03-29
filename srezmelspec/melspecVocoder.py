@@ -11,6 +11,8 @@ import spectral_util
 import os
 import glob
 import scipy.io.wavfile
+import time
+
 
 def main():
   parser = ArgumentParser()
@@ -52,6 +54,8 @@ def main():
 
   spec_fps = glob.glob(os.path.join(args.input_dir, '*.npy'))
   subseq_len = args.subseq_len
+
+  start = time.time()
   for fidx, fp in enumerate(spec_fps):
     _mel_spec = np.load(fp)[:,:,0]
     X_mag = su.tacotron_mel_to_mag(_mel_spec)
@@ -85,6 +89,17 @@ def main():
     output_file_name = os.path.join(args.output_dir, fn)
     print("Writing", fidx, output_file_name)
     audioio.save_as_wav(output_file_name, args.fs, _gen_audio)  
+  end = time.time()
+  print("Execution Time in Seconds", end - start)
 
 if __name__ == '__main__':
   main()
+
+'''
+export CUDA_VISIBLE_DEVICES="-1" 
+python melspecVocoder.py \
+--input_dir /data2/advoc/userstudy/ClockSpec \
+--meta_fp /data2/paarth/TrainDir/srezSpec/ljSpeech/defaultWithoutBatchnormBS8/eval_valid/best_gen_loss_l1-100001.meta \
+--ckpt_fp /data2/paarth/TrainDir/srezSpec/ljSpeech/defaultWithoutBatchnormBS8/eval_valid/best_gen_loss_l1-100001 \
+--output_dir /data2/paarth/dump; \
+'''

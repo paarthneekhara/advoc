@@ -4,7 +4,7 @@ from model import Model, Modes
 import advoc.spectral
 import lws
 from spectral_util import SpectralUtil
-
+import numpy as np
 EPS = 1e-12
 
 class SrezMelSpec(Model):
@@ -255,6 +255,12 @@ class SrezMelSpec(Model):
 
     self.D_vars = D_vars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
     self.G_vars = G_vars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
+
+    total_parameters = 0
+    for var in G_vars:
+      print(var)
+      total_parameters += np.prod(var.get_shape().as_list())
+    print("Total params", total_parameters)
 
     D_opt = tf.train.AdamOptimizer(0.0002, 0.5)
     G_opt = tf.train.AdamOptimizer(0.0002, 0.5)

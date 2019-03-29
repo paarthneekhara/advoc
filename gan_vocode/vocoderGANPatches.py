@@ -2,6 +2,7 @@ import tensorflow as tf
 
 from model import Model, Modes
 import advoc.spectral
+import numpy as np
 
 def _conv_filter(input_, k_size=5, stddev=0.02):
   w_t = tf.get_variable('w', [k_size, 1, input_.get_shape()[-1], 1])
@@ -219,6 +220,12 @@ class VocoderGAN(Model):
     with tf.variable_scope('G'):
       G_z = self.build_generator(x_spec, z_tiled)
     G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='G')
+
+    total_parameters = 0
+    for var in G_vars:
+      print(var)
+      total_parameters += np.prod(var.get_shape().as_list())
+    print("Total params", total_parameters)
 
     # Discriminators
     with tf.name_scope('D_x'), tf.variable_scope('D'):
