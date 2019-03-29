@@ -51,6 +51,8 @@ def main():
   step = tf.train.get_or_create_global_step()
   gan_saver = tf.train.Saver(var_list=G_vars + [step], max_to_keep=1)
 
+  import time
+  start = time.time()
   with tf.Session() as sess:
     print("Restoring")
     gan_saver.restore(sess, args.ckpt_fp)
@@ -77,6 +79,19 @@ def main():
       output_file_name = os.path.join(args.output_dir, fn)
       print("Writing", fidx, output_file_name)
       audioio.save_as_wav(output_file_name, args.fs, gen_audio[0])
+  end = time.time()
+  print("Execution Time in Seconds", end - start)
 
 if __name__ == '__main__':
   main()
+
+'''
+
+export CUDA_VISIBLE_DEVICES="-1" 
+python vocoder.py \
+--input_dir /data2/advoc/Clock/ClockSpectrogram \
+--ckpt_fp /data2/paarth/TrainDir/vocoder/new/spec_reg_1Patchedl2_PS2/eval_valid/best_spec_l2-146054 \
+--output_dir /data2/paarth/dump; \
+
+
+'''
