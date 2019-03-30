@@ -95,11 +95,24 @@ def main():
 if __name__ == '__main__':
   main()
 
+
 '''
-export CUDA_VISIBLE_DEVICES="-1" 
+export CUDA_VISIBLE_DEVICES="0" 
 python melspecVocoder.py \
---input_dir /data2/advoc/userstudy/ClockSpec \
+--input_dir /data2/advoc/Clock/ClockSpectrogram \
 --meta_fp /data2/paarth/TrainDir/srezSpec/ljSpeech/defaultWithoutBatchnormBS8/eval_valid/best_gen_loss_l1-100001.meta \
 --ckpt_fp /data2/paarth/TrainDir/srezSpec/ljSpeech/defaultWithoutBatchnormBS8/eval_valid/best_gen_loss_l1-100001 \
 --output_dir /data2/paarth/dump; \
+
+
+export CUDA_VISIBLE_DEVICES="0" 
+python melspecVocoder.py \
+--input_dir /data2/advoc/Clock/ClockSpectrogram \
+--subseq_len 64 \
+--meta_fp /data2/paarth/TrainDir/srezSpec/ljSpeech/small/encLayers4/eval_valid/best_gen_loss_l1-50001.meta \
+--ckpt_fp /data2/paarth/TrainDir/srezSpec/ljSpeech/small/encLayers4/eval_valid/best_gen_loss_l1-50001 \
+--output_dir /data2/paarth/dump; \
+
+
+
 '''
