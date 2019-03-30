@@ -311,8 +311,21 @@ def infer(fps, args):
           
           while True:
             try:
-              _summaries= sess.run(summaries)
+              _summaries, mel_np, est_np, act_np, gen_np = sess.run([
+                summaries,
+                x_mel_spec,
+                x_inverted_mag_spec,
+                x_mag_spec,
+                gen_mag_spec
+              ])
               summary_writer.add_summary(_summaries, _step)
+
+              fn = os.path.join(infer_dir, "spec")
+              np.save("{}_mel.npy".format( fn, mel_np[0]) )
+              np.save("{}_est_mag.npy".format( fn, est_np[0]) )
+              np.save("{}_act_mag.npy".format( fn, act_np[0]) )
+              np.save("{}_gen_mag.npy".format( fn, gen_np[0]) )
+              
             except tf.errors.OutOfRangeError:
               break
           print("Done!")
