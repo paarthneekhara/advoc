@@ -70,6 +70,9 @@ def main():
       _gen, _heur = gen_sess.run([gen_mag_spec, x_mag_input], feed_dict = {
           x_mag_input : X_mag[n:n+1]
           })
+      
+      _gen = np.clip(_gen, 0, None)
+
       gen_mags.append(_gen[0])
       heuristic_mags.append(_heur[0])
     gen_mag = np.concatenate(gen_mags, axis = 0)
