@@ -29,7 +29,7 @@ def decode_audio(fp, fs=None, mono=False, normalize=False, fastwav=False):
     fs = orig_fs
     if x.dtype == np.int16:
       x = x.astype(np.float32)
-      x /= 32767.
+      x /= 32768.
     elif x.dtype == np.float32:
       pass
     else:
@@ -85,7 +85,7 @@ def save_as_wav(fp, fs, x):
 
   x = np.copy(x[:, 0, 0])
 
-  x *= 32767.
+  x *= 32768.
   x = np.clip(x, -32768., 32767.)
   x = x.astype(np.int16)
   spwavwrite(fp, fs, x)
