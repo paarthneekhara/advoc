@@ -286,13 +286,6 @@ def infer(fps, args):
             ])
           summary_writer.add_summary(_summaries, _step)
           
-          fn = os.path.join(infer_dir, "spec")
-
-          np.save("{}_mel.npy".format( fn, mel_np[0]) )
-          np.save("{}_est_mag.npy".format( fn, est_np[0]) )
-          np.save("{}_act_mag.npy".format( fn, act_np[0]) )
-          np.save("{}_gen_mag.npy".format( fn, gen_np[0]) )
-
         except tf.errors.OutOfRangeError:
           break
       print('Done!')
@@ -319,12 +312,6 @@ def infer(fps, args):
                 gen_mag_spec
               ])
               summary_writer.add_summary(_summaries, _step)
-
-              fn = os.path.join(infer_dir, "spec")
-              np.save("{}_mel.npy".format( fn, mel_np[0]), mel_np)
-              np.save("{}_est_mag.npy".format( fn, est_np[0]), est_np)
-              np.save("{}_act_mag.npy".format( fn, act_np[0]), act_np)
-              np.save("{}_gen_mag.npy".format( fn, gen_np[0]), gen_np)
 
             except tf.errors.OutOfRangeError:
               break

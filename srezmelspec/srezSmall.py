@@ -93,7 +93,6 @@ class SrezMelSpec(Model):
     with tf.variable_scope("encoder_1"):
       output = self._gen_conv(x[:,:,:,:], self.ngf)
       n_time /= 2
-      print("Encoder", output)
       layers.append(output)
 
     layer_specs = [
@@ -121,7 +120,6 @@ class SrezMelSpec(Model):
           n_stride1_layers += 1
           convolved = self._gen_conv(rectified, out_channels, strides = (1, 2))
         output = batchnorm(convolved)
-        print("Encoder", output)
         layers.append(output)
 
     layer_specs = [
@@ -155,7 +153,6 @@ class SrezMelSpec(Model):
           else:
             # use dropout in inference as well
             output = tf.nn.dropout(output, keep_prob= 1 - dropout)
-        print("Deocder", output)
         layers.append(output)
 
     # decoder_1: [batch, 128, 128, ngf * 2] => [batch, 256, 256, generator_outputs_channels]
@@ -255,12 +252,6 @@ class SrezMelSpec(Model):
 
     self.D_vars = D_vars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
     self.G_vars = G_vars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
-
-    total_parameters = 0
-    for var in G_vars:
-      print(var)
-      total_parameters += np.prod(var.get_shape().as_list())
-    print("Total params", total_parameters)
 
     D_opt = tf.train.AdamOptimizer(0.0002, 0.5)
     G_opt = tf.train.AdamOptimizer(0.0002, 0.5)
