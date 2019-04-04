@@ -220,7 +220,7 @@ We additionally consider the more-recent Local Weighted Sums (LWS)~\cite{lws} st
 As a proxy for an ideal solution to either subproblem, 
 we also use magnitude and phase information extracted from real data. 
 
-We show human judges the same waveform vocoded by six different magnitude and phase estimation combinations (inducing a comparison) and ask them to rate the naturalness of each on a subjective $1$ to $5$ scale (full user study methodology outlined in Section~\ref{sec:crowdmos}). 
+We show human judges the same waveform vocoded by six different magnitude and phase estimation combinations (inducing a comparison) and ask them to rate the naturalness of each on a subjective $1$ to $5$ scale (full user study methodology outlined in Section~\ref{sec:ljspeechexp}). 
 Mean opinion scores are shown in Table~\ref{tab:gl}, and we encourage readers to listen to our sound examples linked from the footnote on the first page to help contextualize.
 
 \begin{table}[t]
@@ -285,21 +285,24 @@ In order to perform more accurate magnitude estimation, we formulate it as a gen
 % Since mel - spectrogram is a lossy compression of the magnitude spectrogram, a simple linear transformation for generating the magnitude spectrogram from mel spectrogram is an oversimplification of the recovery process. To do a more accurate decompression, we formulate this task of recovering magnitude spectrograms from the compressed mel spectrograms as a generative modeling problem and propose a Generative Adversarial Network (GAN)\cite{goodfellow2014generative} based solution.
 %CHRIS: Please use \bm when you're talking about a vector (e.g. \bm{z})
 %CHRIS: Changed "Z" to p_Z
-GANs are generative models which seek to learn latent structure in the distribution of data. They do this by mapping samples $\bm{z}$ from a uniform or gaussian distribution $p_Z$ to samples $y$ from another distribution $Y$, $G: z\rightarrow y$ \cite{goodfellow2014generative}. 
+GANs are generative models which seek to learn latent structure in the distribution of data. They do this by mapping samples $\bm{z}$ from a uniform or gaussian distribution $p_Z$ to samples $\bm{y}$ from another distribution $Y$, $G: \bm{z}\rightarrow \bm{y}$ \cite{goodfellow2014generative}. 
 %CHRIS: Referring to "modes" is  not appropriate here
-In such an \textit{unconditional} GAN setting, the generator is seeking to estimate $P(\mathit{data})$. For our purpose, we use a variation of GANs called \textit{conditional} GAN \cite{cGAN} to model the conditional probability distribution of magnitude spectrograms given a mel spectrogram. In \cite{pix2pix}, it is shown that the source of the conditioning information can be something as rich as an image thereby allowing GANs to learn an image to image mapping task. 
+%In such an \textit{unconditional} GAN setting, the generator is seeking to estimate $P(\mathit{data})$. 
+For our purpose, we use a variation of GAN called \textit{conditional} GAN \cite{cGAN} to model the conditional probability distribution of magnitude spectrograms given a mel spectrogram. 
+The pix2pix method~\cite{pix2pix} demonstrates that this conditioning information can be a structurally-rich image, extending GANs to learn stochastic mappings from one image domain (spectrogram domain in our case) to another.
+We adapt the pix2pix approach for our task.
 
 %Since we are trying to model the conditional probability distribution of magnitude spectrogrms given mel spectrograms, it makes we  $P( \mathit{mag} | \mathit{mel} )$ 
 %CHRIS: Please connect this sentence back to our task. Why do we need a conditional GAN? Please make references to the data distribution being modeld. For example, GANs are seeking to learn $p(data)$, while we might use a conditional GAN to model P(mag | mel), as there are many magnitude spectrograms which might map to the same magnitude spectrogram. I might also even drop the pix2pix citation here e.g. "In [pix2pix] they show that this source of conditioning information can be something as rich as an image, hence the GAN is learning an image mapping task..."
 %In contrast, Conditional Generative Adversarial Networks \cite{cGAN} allow us to direct the data generation process by conditioning generation on some additional information $x$ and learn a mapping $G: \{x,z\}\rightarrow y$.
 
-\subsection{Objective}
+% \subsection{Objective}
 
 %CHRIS: I changed "linearly scaled" to "linear-amplitude". Be careful about this distinction because it's not clear if you're talking about amplitudes or frequency
-We propose a conditional GAN-based model to generate appropriate magnitude spectrograms $y$ given linear-amplitude mel spectrograms $x$. The conditional GAN objective is given by:
+The conditional GAN objective to generate appropriate magnitude spectrograms $\bm{y}$ given mel spectrograms $\bm{x}$ is:
 \begin{align}
-    \mathcal{L}_{\mathit{cGAN}}(G,D) = &\mathbb{E}_{x,y}[\log D(x,y)] + \nonumber \\
-                 &\mathbb{E}_{x,z}[\log (1-D(x,G(x,z))],\label{cGAN_equation}
+    \mathcal{L}_{\mathit{cGAN}}(G,D) = &\mathbb{E}_{\bm{x},\bm{y}}[\log D(\bm{x},\bm{y})] + \nonumber \\
+                 &\mathbb{E}_{\bm{x},\bm{z}}[\log (1-D(\bm{x},G(\bm{x},\bm{z}))],\label{cGAN_equation}
 \end{align}
 where the generator $G$ tries to minimize this objective against an adversary $D$ that tries to maximize it. i.e $G^*  = \arg\min_G \max_D \mathcal{L}_{\mathit{cGAN}}(G,D)$. 
 In such a conditional GAN setting, 
@@ -321,7 +324,7 @@ Our final objective therefore becomes:
 \end{align}
 
 %CHRIS: You need a sentence about Lambda. 
-Here, $\lambda$ is a hyperparameter which determines the tradeoff between the $L_1$ loss and Adversarial loss.
+Here, $\lambda$ is a hyperparameter which determines the trade-off between the $L_1$ loss and adversarial loss.
 
 % CHRIS: You definitely need to cite pix2pix sooner since our method is *strongly* based on it. Citing it this late suggests that all we're getting from it is the dropout thing
 % Since there are multiple valid magnitude spectrograms corresponding to a compressed mel spectrogram representation, it is important to pass the prior $z$ along with the conditioning signal $x$ to avoid learning a deterministic generator. In practice, however, past work \cite{Mathieu2016DeepMV,pix2pix} has observed that in such a setting the generator simply learns to ignore $z$. To counter this problem, Isola \emph{et al.} \cite{pix2pix} proposed to add noise in the form of dropout applied on several layers in the generator at both training and generation time. We follow the same procedure and introduce stochasticity in the generation phase using dropout.
@@ -332,33 +335,45 @@ Here, $\lambda$ is a hyperparameter which determines the tradeoff between the $L
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.6\columnwidth]{figures/modelvertical.pdf}
-    \caption{Adversarial Vocoder Model}
+    \caption{Adversarial Vocoder Model: The generator performs an image-to-image translation from the estimated magnitude spectrogram to the actual magnitude spectrogram guided by an adversarial loss from the discriminator and the $L_1$ distance between the generated and actual magnitude spectrogram }
     \label{fig:model}
 \end{figure}
 
 Figure \ref{fig:model} shows the high level training setup for adversarial inversion of the mel spectrogram representation into the magnitude spectrogram.
 
 % CHRIS: Mention that the pseudoinverse is *fixed* (i.e. not learned as part of the generator's parameters)
-\textbf{Generator}~~~The generator network $G$ takes as input the linearly amplitude mel spectrogram representation $x$ of shape $(n, \mathit{melBins})$ and generates a magnitude spectrogram of shape $(n, 513)$. The generator first estimates the magnitude spectrorgram through a fixed linear projection of the mel spectrogram using the approximate inverse of the mel transformation matrix. The estimated magnitude spectrogram goes through a convolution based encoder-decoder architecture with skip connections similar to the U-net model \cite{unet}. Since our task can be thought of as an image to image translation problem between the estimated magnitude spectrogram and the actual magnitude spectrogram, we \cite{pix2pix}.
+\textbf{Generator}~~~The generator network $G$ takes as input the linear-amplitude mel spectrogram representation $x$ of shape $(n, \mathit{melBins})$ and generates a magnitude spectrogram of shape $(n, 513)$. The generator first estimates the magnitude spectrorgram through a fixed (non trainable) linear projection of the mel spectrogram using the approximate inverse of the mel transformation matrix. The estimated magnitude spectrogram goes through a convolution based encoder-decoder architecture with skip connections as in pix2pix~\cite{pix2pix}. 
+%Since our task can be thought of as an image to image translation problem between the estimated magnitude spectrogram and the actual magnitude spectrogram, we use the pix2pix \cite{pix2pix} generator architecture.
 % CHRIS: What does rectifying mean here? Also I don't like "reduces". Say something like "Since our problem can be thought of as the task of mapping an \emph{estimated} magnitude spectrogram to an \emph{actual} magnitude spectrogram..."
 %Since our problem reduces to rectifying an estimated magnitude spectrogram given the actual magnitude spectrogram as the target, we use the pix2pix generator architecture proposed in \cite{pix2pix}. 
-In our preliminary experiments, we did not find using the batch normalization effective for our setup, so we do not include any batch normalization layers in the generator.
+%In our preliminary experiments, we did not find the use of batch normalization effective for our setup, so we do not include any batch normalization layers in the generator.
 % CHRIS: Two problems here. One, you've never described the architecture of the original model so it's weird to have number so flayers for the smaller model. Two, you've never introduced the "advoc" shortening. I would punt many of these details to the codebase ("We ommitted specifics of the architecture for brevity, however we point to our codebase for precise model implementations...")
-Additionally, we also train a smaller generator \textit{(Advoc - small)} with fewer convolutional layers and fewer convolutional channels. We omitted the specifics of our architecture for brevity, however we point to our codebase for precise model implementations.
+Past works~\cite{Mathieu2016DeepMV,pix2pix} have noted that generators similar to our own empirically learn to ignore latent codes leading to deterministic models. 
+We adopt the same policy of using dropout at both training and test time to force the model to be stochastic (as our task is not a one-to-one mapping). 
+Additionally, we also train a smaller generator \textit{(Advoc - small)} with fewer convolutional layers and fewer convolutional channels. 
+We omit the specifics of our architecture for brevity, however we point to our codebase (link in footnote of previous page) for precise model implementations.
 % CHRIS: You've already mention there are skip connections. Strike this.
 
 \textbf{Discriminator}~~~Previous works have
 %explored 
 found
-that training the generator using just an $L_1$ or $L_2$ loss produces blurry results in image translation problems \cite{pathakCVPR16context,zhang2016colorful}. While minimizing an $L_1$ loss ensures that the high level structure of the generated output matches the target, we need to augment it with an adversarial loss to help maintain the low level details in the generated output.
-In \cite{pix2pix} Isola \emph{et al.} proposed a Markovian Discriminator -- \textit{PatchGAN}  that tries to classify an $N \times N$  patch in an image as real or fake rather than the whole image. This allows the discriminator to focus on low-level detail in the image and the $L_1$ loss handles the high level similarity between the input and output. 
+that training generators similar to our own using just an $L_1$ or $L_2$ loss produces images with reasonable global structure (spatial relationships preserved) but poor local structure (blurry)~\cite{pathakCVPR16context,zhang2016colorful}.
+As in~\cite{pix2pix}, we combine an $L_1$ loss with a discriminator which operates on \emph{patches} (subregions) of a spectrogram to help improve the ``sharpness'' of the output.
+Our discriminator takes as input the estimated spectrogram and \emph{either} the generated or real magnitude spectrogram. 
+Thus, in order to satisfy the discriminator, the generator needs to produce magnitude spectrograms that both correspond to the mel spectrogram \emph{and} look realistic.
+%Noting this, Isola \emph{et al}.~\cite{pix2pix} combine an $L_1$ objective with an adversarial objective from a discriminator operating on \emph{patches} of the image.
+%As in~\cite{pix2pix}, we adopt a discriminator which operates on \emph{patches} of the spectrogram
+%While minimizing an $L_1$ loss ensures that the high level structure of the generated output matches the target, we need to augment it with an adversarial loss to help maintain the low level details in the generated output.
+%In \cite{pix2pix} Isola \emph{et al.} proposed a Markovian Discriminator -- \textit{PatchGAN}  that tries to classify an $N \times N$  patch in an image as real or fake rather than the whole image allowing the discriminator to focus on low level details in an image.  
+%This allows the discriminator to focus on low-level detail in the image and the $L_1$ loss handles the high level similarity between the input and output. 
 % CHRIS: "takes as input the estimated spectrogram \emph{and} either the generated or the real magnitude spectrogram". You can leave out that they are concatenated if it's too wordy.
-We use the same \textit{PatchGAN} discriminator that takes as input the estimated spectrogram \emph{and} either the generated or the real magnitude spectrogram.
+%We adopt a discriminator that takes as input the estimated spectrogram \emph{and} either the generated or the real magnitude spectrogram.
 % CHRIS: "runs convolutionally" is imprecise, also you are personifying it. It is something we are doing, not the discriminator of its own free will. "We average the discriminator activations across all patches to get...."
-We average the discriminator activations across all patches to get the final output of $D$.
+%The discriminator activations across all patches are averaged to get the final output of $D$.
 
 %CHRIS: I've already mentioned this at least once in my writing (end of section 3). This paragraph should be condensed to a single sentence or perhaps excluded entirely if we really need space.
-We perform phase estimation on the generated magnitude spectrogram using the LWS method as the final step of our audio synthesis pipeline.
+To complete our adversarial vocoding pipeline, we combine generated magnitude spectrograms with LWS-estimated phase spectrograms and use the inverse STFT to synthesize audio.
+%we perform phase estimation on the generated magnitude spectrogram using the LWS method as the final step of our adversarial vocoding pipeline.
 
 
 % \subsection{Inverting the generated Magnitude Spectrogram}
@@ -379,9 +394,10 @@ We perform phase estimation on the generated magnitude spectrogram using the LWS
 We focus our primary empirical study on the publicly available LJ Speech dataset \cite{ljspeech}, which is popularly used by researchers for training TTS systems \cite{waveglow,r9y9}. 
 The dataset contains 13,100 short audio clips of a single female speaker reading from 7 non-fiction books. Clips vary in length from 1 to 10 seconds and have a total length of 24 hours.
 
-Audio is processed using the feature extraction process described in Section \ref{sec:feature}. We perform STFT with window size 1024 and hop size 256 and discard phase information to obtain magnitude spectrograms with 513 frequency bins. The magnitude spectrogram is compressed to a mel spectrogram with
+Audio is processed using the feature extraction process described in Section \ref{sec:feature}. 
+%We perform STFT with window size 1024 and hop size 256 and discard phase information to obtain magnitude spectrograms with 513 frequency bins. The magnitude spectrogram is compressed to a mel spectrogram with
 %JULIAN: Please use \mathit
-$\mathit{melBins}$ frequency bins by multiplication with the mel transformation matrix.  
+%$\mathit{melBins}$ frequency bins by multiplication with the mel transformation matrix.  
 %Magnitude Spectrograms of shape $(256, \mathit{melBins})$ and $(256, 513)$ respectively. 
 We train three models for $\mathit{melBins} \in \lbrace 20, 40, 80 \rbrace$ to study the feasibility of our technique 
 %works 
@@ -389,13 +405,14 @@ for
 %higher 
 varying
 %CHRIS: Was the batch size really only eight? That's unusually small. Why did you use such small batches?
+%PAARTH: Since we are using 256 time-steps in the specgtrogram (~4 seconds)  as opposed to 64, I thought we can get away with a smaller batch size. Other models were trained with batch size 16 or 32 though. But this one was 8 because intially I observed learning was faster with a smaller batch size.
 levels of mel compression. Each of the models is trained for 100,000 mini-batch iterations using a batch size of 8 which corresponds to
 %JULIAN: Make sure your latex code generates an error so you don't miss things like this
 % CHRIS: PLEASE FILL IN THIS WALL CLOCK NUMBER
-XX hours of wall clock training time using a NVIDIA 1080Ti GPU. We set the regularization parameter $\lambda = 10$ for our experiments and use an Adam Optimizer with learning rate $2e-4$. 
+XX hours of wall clock training time using a NVIDIA 1080Ti GPU. We set the regularization parameter $\lambda = 10$ and use the Adam optimizer~\cite{kingma2014adam} ($\alpha = 0.0002$).
 
-\subsection{Vocoding LJ Speech Mel Spectrograms}
-
+\subsection{Vocoding LJ Speech mel spectrograms}
+\label{sec:ljspeechexp}
 In this study we are concerned with vocoding both real mel spectrograms extracted from the LJ Speech dataset
 \emph{and} mel spectrograms generated by a language-to-spectrogram model~\cite{shen2018natural} trained on LJ Speech. 
 We compare both our large (\emph{AdVoc}) and small (\emph{AdVoc-small}) adversarial vocoder models to 
@@ -409,9 +426,9 @@ We vocode both the real and synthetic spectrograms to audio using the five metho
 Audio from each method can be found in our sound examples (footnote of first page).
 
 To gauge the relative quality of our methods against others,
-we conduct two crowd-sourced mean opinion score studies with human judges on Amazon Mechanical Turk. 
+we conduct two mean opinion score (comparative) studies with human judges on Amazon Mechanical Turk. 
 In the first user study, 
-we show each judge a randomly-ordered batch of six versions of the same utterance: the original speech recording and the spectrogram of that utterance vocoded by the five aforementioned methods. 
+we show each judge a randomly-ordered batch of six versions of the same utterance: the original utterance and the spectrogram of that utterance vocoded by the five aforementioned methods. 
 In the second user study, 
 we show each judge a batch consisting of the real utterance and five vocodings of a synthetic spectrogram with the same transcript.
 Judges are asked to rate the naturalness of each on a subjective $1$--$5$ scale with $1$ point increments. 
@@ -420,14 +437,14 @@ We display
 %MOS with $95$\% confidence intervals 
 mean opinion scores
 in Table~\ref{tab:gl}. 
-We also include the speed of each method (relative to real time) as measured on an NVIDIA 1080Ti GPU, and the sizes of each model's parameters in megabytes. 
+We also include the speed of each method (relative to real time) as measured on GPU, and the sizes of each model's parameters in megabytes. 
 
 % TODO(camera ready): Use Brian's convex optimization in librosa thing instead of pinv
 % TODO(camera ready): Make sure this does not produce negative values for magnitude estimation like pinv does...
 
 \begin{table}[t]
 \centering
-\caption{Comparison of vocoding methods on mel spectrograms with $80$ bins. We display comparative mean opinion scores from two separate user studies for vocoding spectrograms extracted from real speech (MOS-Real) and vocoding spectrograms generated by a state-of-the-art TTS method (MOS-TTS) with $95$\% confidence intervals. $\mathbf{\times}$ RT denotes the speed up over real time, higher being faster. MB denotes the size of each vocoding model in megabytes.
+\caption{Comparison of vocoding methods on mel spectrograms with $80$ bins. We display comparative mean opinion scores from two separate user studies for vocoding spectrograms extracted from real speech (MOS-Real) and spectrograms generated by a state-of-the-art TTS method (MOS-TTS) with $95$\% confidence intervals. $\mathbf{\times}$ RT denotes the speed up over real time; higher is faster. MB denotes the size of each model in megabytes.
 }
 %  Tacotron-2 generated spectrograms conditioned on text \textit{MOS(TTS)}. The fourth column \textit{$\times$ RT} denotes the speed up over real time, higher being faster. The column \textit{MB} presents the size of each vocoding Model in Mega Bytes. 
 \footnotesize
@@ -437,7 +454,7 @@ We also include the speed of each method (relative to real time) as measured on 
 Source & MOS-Real & MOS-TTS & $\times$ RT & MB \\
 \midrule
 Real data & $4.16 \pm 0.06$& $4.28 \pm 0.07$  & $1.000$ &   \\
-Pseudoinv & $2.91 \pm 0.10$ & $2.12 \pm 0.09$ & $8.836$ & $0.2$ \\
+Pseudoinverse & $2.91 \pm 0.10$ & $2.12 \pm 0.09$ & $8.836$ & $0.2$ \\
 WaveNet \cite{oord2016wavenet} & $3.98 \pm 0.07$ & $3.87 \pm 0.07$ & $0.003$ & $95.0$ \\
 WaveGlow \cite{waveglow} & $4.09 \pm 0.06$ & $3.89 \pm 0.07$ & $1.229$ & $334.7$ \\
 AdVoc & $3.78 \pm 0.07$ & $2.91 \pm 0.08$ & $3.111$ & $207.7$ \\
@@ -449,10 +466,12 @@ AdVoc-small & $3.68 \pm 0.07$ & $3.09 \pm 0.07$ & $3.437$ & $52.0$ \\
 
 \end{table}
 
-Our results demonstrate that our adversarial magnitude estimation technique (AdVoc) significantly outperforms magnitude estimation using psuedo-inverse of the mel basis for both real and 
+Our results demonstrate that---for both real \emph{and} synthetic spectrograms---our adversarial magnitude estimation technique (AdVoc) significantly outperforms magnitude estimation using the psuedoinverse of the mel basis.
 %JULIAN: Keep capitalization consistent.
 %JULIAN: Again this reads like a tonne of undefined acronyms (to me at least). Very unclear how much of this lingo can be taken as assumed knowledge.
-Tacotron generated mel spectrograms. Our method is more than $1,000 \times$ faster than the autoregressive Wavenet vocoder while being $1.8 \times$ more memory effecient. As compared with WaveGlow we are $2.8 \times$ faster and $6.4 \times$ memory effecient. 
+%Tacotron generated mel spectrograms. 
+Our method is more than $1000 \times$ faster than the autoregressive WaveNet vocoder while using $1.8 \times$ fewer parameters. 
+As compared with WaveGlow we are $2.8 \times$ faster and $6.4 \times$ fewer parameters. 
 
 \begin{table}[t]
 \centering
@@ -463,9 +482,9 @@ Tacotron generated mel spectrograms. Our method is more than $1,000 \times$ fast
 Source & $melBins$ & MOS \\
 \midrule
 Real data & & $4.05 \pm 0.07$ \\
-Pseudoinv & $20$ & $2.68 \pm 0.10$ \\
-Pseudoinv & $40$ & $2.84 \pm 0.10$ \\
-Pseudoinv & $80$ & $3.25 \pm 0.09$ \\
+Pseudoinverse & $20$ & $2.68 \pm 0.10$ \\
+Pseudoinverse & $40$ & $2.84 \pm 0.10$ \\
+Pseudoinverse & $80$ & $3.25 \pm 0.09$ \\
 AdVoc & $20$ & $3.75 \pm 0.07$ \\
 AdVoc & $40$ & $3.79 \pm 0.07$ \\
 AdVoc & $80$ & $3.86 \pm 0.07$ \\
@@ -487,18 +506,18 @@ Table~\ref{tab:compression} demonstrate that our model can vocode highly compres
 % \subsection{TTS experiments using Tacotron-2}
 % We conduct a similar user study as above on the synthetic mel spectrograms generated by tacotron 2 for mel spectrograms generated for 100 randomly selected texts from the LJ SPeech dataset using the pretrained Tacotron-2 model. 
 
-\subsection{Unsupervised Audio Synthesis}
+\subsection{Unsupervised audio synthesis}
 
 \begingroup
 \setlength{\tabcolsep}{6pt}
-\begin{table}[htbp]
+\begin{table}[t]
 \centering
-\caption{Combining our adversarial vocoding approach with GAN-generated mel spectrograms outperforms our prior work in unsupervised generation of individual words by both quantitative and qualitative metrics.}
+\caption{Combining our adversarial vocoding approach with GAN-generated mel spectrograms outperforms our prior work in unsupervised generation of individual words by all metrics.}
 \vspace{2mm}
 \footnotesize
 \begin{tabular}{lccc}
 \toprule
-Source & Inception Score & Acc. & MOS  \\
+Source & Inception score & Acc. & MOS  \\
 \midrule
 % Real (train) & $9.18 \pm 0.04$  \\
 Real data & $8.01 \pm 0.24$ & $0.95$ & $3.9 \pm 0.15$ \\
@@ -506,7 +525,7 @@ Real data & $8.01 \pm 0.24$ & $0.95$ & $3.9 \pm 0.15$ \\
 WaveGAN \cite{donahue2019wavegan} & $4.67 \pm 0.01$ & $0.58$ & $2.3 \pm 0.18$   \\
 SpecGAN \cite{donahue2019wavegan} & $6.03 \pm 0.04$ & $0.66$ & $1.9 \pm 0.17$ \\
 % \midrule
-MelSpecGAN + AdVoc & $6.63 \pm 0.03$ & $0.71$ & $3.4 \pm 0.2$ \\
+MelSpecGAN + AdVoc & $6.63 \pm 0.03$ & $0.71$ & $3.4 \pm 0.20$ \\
 \bottomrule
 \end{tabular} 
 \label{tab:sc09Small}
@@ -514,25 +533,28 @@ MelSpecGAN + AdVoc & $6.63 \pm 0.03$ & $0.71$ & $3.4 \pm 0.2$ \\
 \end{table}
 \endgroup
 
-Here we are concerned with the \emph{unsupervised} generation of speech (as opposed to supervised generation in the case of TTS). 
+In this section we are concerned with the \emph{unsupervised} generation of speech (as opposed to supervised generation in the case of TTS). 
 We focus on the SC09 digit generation task proposed in our previous work~\cite{donahue2019wavegan}, 
-where the goal is to learn to generate examples of spoken digits ``zero'' through ``nine'' without labels. 
+where the goal is to learn to generate examples of spoken digits ``zero'' through ``nine'' \emph{without} labels. 
 We first train a GAN to generate mel spectrograms of spoken digits, then train an adversarial vocoder to generate audio conditioned on those spectrograms. 
-Using our pretrained digit classifier, we calculate an inception score~\cite{salimans2016improved} for our approach, finding it to outperform our previous state-of-the-art results by $9$\%. 
-We also calculate an ``accuracy'' by comparing human labelings of our generated digits to classifier labels, and also solicit subjective speech quality ratings from listeners, finding again that our adversarial vocoding-based method outperforms our previous results (Table~\ref{tab:sc09Small})
+Using a pretrained digit classifier, 
+we calculate an Inception score~\cite{salimans2016improved} for our approach, finding it to outperform our previous state-of-the-art results by $9$\%. 
+We also calculate an ``accuracy'' by comparing human labelings to classifier labels for our generated digits, and also solicit subjective speech quality ratings from listeners, finding that our adversarial vocoding-based method outperforms our previous results (Table~\ref{tab:sc09Small}).
 
 \section{Conclusion}
 
 In this work we have shown that solutions to \emph{either} the magnitude or phase estimation subproblems within common vocoding pipelines can result in high-quality speech. 
-We have demonstrated a learning-based method for magnitude estimation which significantly improves upon common heuristics for this task. 
-Our method has applications in many domains for which fast vocoding of spectrograms is desirable, as we have demonstrated for both TTS and unsupervised audio generation. 
-We hope that our work inspires more research on the two primary subproblems in vocoding pipelines, as improvements on one subproblem could potentially be combined with improvements on the other.
+We have demonstrated a learning-based method for magnitude estimation which significantly improves upon common heuristics for this task.
+We demonstrate that our method can integrate with an existing TTS pipeline to provide comparatively fast waveform synthesis. 
+Additionally, our method has advanced the state-of-the-art in unsupervised small-vocabulary speech generation.
+%Our method has applications in several domains for which fast vocoding of spectrograms is desirable, as we have demonstrated for both TTS and unsupervised audio generation. 
+%We hope that our work inspires more research on the two primary subproblems in vocoding pipelines, as improvements on one subproblem could potentially be combined with improvements on the other.
 
-\section{Acknowledgements}
+%\section{Acknowledgements}
 
-The authors would like to thank Bo Li and Miller Puckette for helpful discussions about this work. 
-This research was supported by the UC San Diego Chancellor’s Research Excellence Scholarship program.
-Thanks to NVIDIA for GPU donations which were used in the preparation of this work.
+%The authors would like to thank Bo Li and Miller Puckette for helpful discussions about this work. 
+%This research was supported by the UC San Diego Chancellor’s Research Excellence Scholarship program.
+%Thanks to NVIDIA for GPU donations which were used in the preparation of this work.
 
 \bibliographystyle{IEEEtran}
 
