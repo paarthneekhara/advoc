@@ -21,8 +21,8 @@ class TestAudioIOModule(unittest.TestCase):
     self.assertEqual(x.dtype, np.float32)
     self.assertEqual(fs, 44100, 'incorrect sample rate')
     self.assertEqual(x.shape, (164864, 1, 1), 'incorrect shape')
-    self.assertAlmostEqual(x.min(), -0.47483748, 8, 'incorrect min value')
-    self.assertAlmostEqual(x.max(), 0.39728996, 8, 'incorrect max value')
+    self.assertAlmostEqual(x.min(), -0.474823, 6, 'incorrect min value')
+    self.assertAlmostEqual(x.max(), 0.397278, 6, 'incorrect max value')
 
     with self.assertRaises(ValueError, msg='should not be able to resample'):
       decode_audio(WAV_MONO, fs=22050, fastwav=True)
@@ -66,6 +66,15 @@ class TestAudioIOModule(unittest.TestCase):
 
     fs, x = decode_audio(MP3_STEREO, mono=True)
     self.assertEqual(x.shape, (164864, 1, 1), 'incorrect shape')
+
+  
+  def test_scipy_librosa_equivalence(self):
+    fs_librosa, x_librosa = decode_audio(WAV_MONO, fastwav=False)
+    fs_scipy, x_scipy = decode_audio(WAV_MONO, fastwav=True)
+
+    self.assertEqual(fs_librosa, fs_scipy, 'incorrect sample rate')
+    self.assertEqual(type(fs_librosa), type(fs_scipy), 'incorrect sample rate')
+    self.assertTrue(np.array_equal(x_librosa, x_scipy), 'incorrect sample rate')
 
 
   def test_save_as_wav(self):

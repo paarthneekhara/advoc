@@ -2,20 +2,22 @@ import numpy as np
 import tensorflow as tf
 
 from advoc.audioio import decode_audio
-from advoc.spectral import waveform_to_r9y9_melspec_tf
+from advoc.spectral import waveform_to_melspec_tf, stft_tf
 
 
 def decode_extract_and_batch(
     fps,
     batch_size,
     subseq_len,
-    audio_fs,
+    audio_fs=22050,
     audio_mono=True,
     audio_normalize=True,
     decode_fastwav=False,
     decode_parallel_calls=1,
-    extract_type='r9y9_melspec',
-    extract_parallel_calls=1,
+    extract_type='magspec',
+    extract_nfft=1024,
+    extract_nhop=256,
+    extract_parallel_calls=4,
     repeat=False,
     shuffle=False,
     shuffle_buffer_size=None,
@@ -35,16 +37,20 @@ def decode_extract_and_batch(
     audio_normalize: If false, do not normalize audio waveforms.
     decode_fastwav: If true, uses scipy to decode standard wav files.
     decode_parallel_calls: Number of parallel decoding threads.
-    extract_type: Type of features to extract (None for no features)
+    extract_type: Type of features to extract (None for no feature extraction).
+    extract_nfft: STFT window size for feature extraction.
+    extract_nhop: STFT hop size for feature extraction.
     extract_parallel_calls: Number of parallel extraction threads.
     repeat: If true (for training), continuously iterate through the dataset.
     shuffle: If true (for training), buffer and shuffle the subsequences.
     subseq_randomize_offset: If true, randomize starting position for subseq.
-    pad_end: If true, allows zero-padded examples at the end.
+    subseq_overlap_ratio: Ratio of overlap between feature slices.
+    subseq_pad_end: If true, zero pad features.
 
   Returns:
     A tuple of np.float32 tensors representing audio and feature subsequences.
       audio: [batch_size, ?, 1, nch]
+      features: [batch_size, ? // nhop, nfeats, nch]
   """
   # Create dataset of filepaths
   dataset = tf.data.Dataset.from_tensor_slices(fps)
@@ -84,13 +90,28 @@ def decode_extract_and_batch(
     feature_fs = audio_fs
     subseq_pad_val = 0.
     dataset = dataset.map(lambda x: (x, x))
-  elif extract_type == 'r9y9_melspec':
-    nhop = 256
-
+  elif extract_type == 'melspec':
     def _extract_feats_shaped(wav):
-      return waveform_to_r9y9_melspec_tf(wav[tf.newaxis], fs=audio_fs)[0]
+      return waveform_to_melspec_tf(
+          wav[tf.newaxis],
+          fs=audio_fs,
+          nfft=extract_nfft,
+          nhop=extract_nhop)[0]
 
-    feature_fs = audio_fs / nhop
+    feature_fs = audio_fs / extract_nhop
+    subseq_pad_val = 0.
+    dataset = dataset.map(
+        lambda x: (_extract_feats_shaped(x), x),
+        num_parallel_calls=extract_parallel_calls)
+  elif extract_type == 'magspec':
+    def _extract_feats_shaped(wav):
+      spec = stft_tf(
+          wav[tf.newaxis],
+          nfft=extract_nfft,
+          nhop=extract_nhop)[0]
+      return tf.abs(spec)
+
+    feature_fs = audio_fs / extract_nhop
     subseq_pad_val = 0.
     dataset = dataset.map(
         lambda x: (_extract_feats_shaped(x), x),

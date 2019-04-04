@@ -14,11 +14,11 @@ setup(
     url='https://github.com/chrisdonahue/advoc',
     packages=find_packages(),
     install_requires=[
-      'tensorflow-gpu==1.12.0',
+      'tensorflow-gpu>=1.12.0',
       'librosa==0.6.3',
       'lws==1.2',
-      'numpy>=1.16.1',
-      'scipy==1.2.1',
+      'numpy>=1.16.0',
+      'scipy>=1.0.0',
     ],
     test_suite='tests'
 )
