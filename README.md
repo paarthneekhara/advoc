@@ -4,7 +4,7 @@ Code from our paper *Expediting TTS Synthesis with Adversarial Vocoding*. Sound 
 
 ## Installation
 
-There are multiple training scripts in this repository, but they all require the lightweight `advoc` package. To install globally, use `sudo pip install -e .` from this directory. To install in a virtual environment, follow these instructions:
+There are multiple training scripts in this repository, but they all require the lightweight `advoc` package. This package is a well-tested set of modules which handle audio IO, spectral processing, and heuristic vocoding in both `numpy` and `tensorflow`. To install globally, use `sudo pip install -e .` from this directory. To install in a virtual environment, follow these instructions:
 
 ```
 virtualenv -p python3 --no-site-packages advoc
@@ -14,6 +14,12 @@ source bin/activate
 cd advoc
 pip install -e .
 ```
+
+### Testing
+
+To run our suite of tests to affirm reproducibility of our feature representations, heuristic inversion code, etc. run:
+
+`python setup.py test`
 
 ## Mel spectrogram GAN (MelSpecGan)
 
@@ -28,7 +34,3 @@ python train.py train \
   ${WORK_DIR} \
   --data_dir ./data/sc09/train \
 ```
-
-## Testing
-
-`python setup.py test`
