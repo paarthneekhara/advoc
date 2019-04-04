@@ -1,3 +1,5 @@
+# This script takes a directory of waveforms and creates a directory of spectrograms.
+
 if __name__ == '__main__':
   from argparse import ArgumentParser
   import glob
@@ -10,7 +12,7 @@ if __name__ == '__main__':
 
   parser = ArgumentParser()
 
-  parser.add_argument('--data_dir', type=str, required=True,
+  parser.add_argument('--wave_dir', type=str, required=True,
       help='Directory of audio files')
   parser.add_argument('--out_dir', type=str, required=True,
       help='Directory for spectrograms')
@@ -19,7 +21,7 @@ if __name__ == '__main__':
       help='If set, provides faster loading of standard WAV files via scipy')
 
   parser.set_defaults(
-      data_dir=None,
+      wave_dir=None,
       out_dir=None,
       data_fast_wav=False)
 
@@ -28,7 +30,7 @@ if __name__ == '__main__':
   if not os.path.isdir(args.out_dir):
     os.makedirs(args.out_dir)
 
-  wave_fps = glob.glob(os.path.join(args.data_dir, '*'))
+  wave_fps = glob.glob(os.path.join(args.wave_dir, '*'))
   for i, wave_fp in tqdm(enumerate(wave_fps)):
     wave_fn = os.path.splitext(os.path.split(wave_fp)[1])[0]
     spec_fn = wave_fn + '.npy'
