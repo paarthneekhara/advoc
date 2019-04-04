@@ -12,7 +12,7 @@ from util import feats_to_uint8_img, feats_to_approx_audio, feats_norm, feats_de
 
 
 TRAIN_BATCH_SIZE = 64
-TRAIN_LOSS = 'dcgan'
+TRAIN_LOSS = 'wgangp'
 Z_DIM = 100
 FS = 16000
 
@@ -28,7 +28,7 @@ def train(fps, args):
         audio_normalize=True,
         decode_fastwav=True,
         decode_parallel_calls=8,
-        extract_type='r9y9_melspec',
+        extract_type='melspec',
         extract_parallel_calls=8,
         repeat=True,
         shuffle=True,

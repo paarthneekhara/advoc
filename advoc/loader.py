@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from advoc.audioio import decode_audio
-from advoc.spectral import waveform_to_r9y9_melspec_tf
+from advoc.spectral import waveform_to_melspec_tf, stft_tf
 
 
 def decode_extract_and_batch(
@@ -14,7 +14,7 @@ def decode_extract_and_batch(
     audio_normalize=True,
     decode_fastwav=False,
     decode_parallel_calls=1,
-    extract_type='r9y9_melspec',
+    extract_type='magspec',
     extract_nfft=1024,
     extract_nhop=256,
     extract_parallel_calls=4,

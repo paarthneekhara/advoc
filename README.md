@@ -1,5 +1,7 @@
 # Adversarial vocoding (`advoc`)
 
+Code from our paper *Expediting TTS Synthesis with Adversarial Vocoding*. Sound examples can be found [here](https://chrisdonahue.github.io/advoc_examples).
+
 ## Installation
 
 ```
