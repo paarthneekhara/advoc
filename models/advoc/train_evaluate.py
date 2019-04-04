@@ -26,7 +26,7 @@ def train(fps, args):
 
   # Load data
   with tf.name_scope('loader'):
-    x_mag_spec, x_wav = decode_extract_and_batch(
+    x_magspec, x_wav = decode_extract_and_batch(
       fps,
       batch_size=model.train_batch_size,
       subseq_len=model.subseq_len,
@@ -35,7 +35,7 @@ def train(fps, args):
       audio_normalize=args.audio_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
-      extract_type='mag_spec',
+      extract_type='magspec',
       extract_parallel_calls=8,
       repeat=True,
       shuffle=True,
@@ -49,10 +49,10 @@ def train(fps, args):
   # Create model
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
   
-  x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
-  x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
+  x_melspec = spectral.mag_to_mel_linear_spec(x_magspec)
+  x_inverted_magspec = spectral.mel_linear_to_magspec(x_melspec, transform = 'inverse')
 
-  model(x_inverted_mag_spec, x_mag_spec, x_wav, x_mel_spec)
+  model(x_inverted_magspec, x_magspec, x_wav, x_melspec)
 
   #Train
   with tf.train.MonitoredTrainingSession(
@@ -88,7 +88,7 @@ def eval(fps, args):
   print('-' * 80)
 
   with tf.name_scope('loader'):
-    x_mag_spec, x_wav = decode_extract_and_batch(
+    x_magspec, x_wav = decode_extract_and_batch(
       fps,
       batch_size=model.eval_batch_size,
       subseq_len=model.subseq_len,
@@ -97,7 +97,7 @@ def eval(fps, args):
       audio_normalize=args.audio_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
-      extract_type='mag_spec',
+      extract_type='magspec',
       extract_parallel_calls=8,
       repeat=False,
       shuffle=False,
@@ -109,27 +109,27 @@ def eval(fps, args):
       prefetch_gpu_num=None)
   
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
-  x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
-  x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
+  x_melspec = spectral.mag_to_mel_linear_spec(x_magspec)
+  x_inverted_magspec = spectral.mel_linear_to_magspec(x_melspec, transform = 'inverse')
 
   with tf.variable_scope("generator") as vs:
     if model.generator_type == "pix2pix":
-      gen_mag_spec = model.build_generator(x_inverted_mag_spec)
+      gen_magspec = model.build_generator(x_inverted_magspec)
     elif model.generator_type == "linear":
-      gen_mag_spec = model.build_linear_generator(x_inverted_mag_spec)
+      gen_magspec = model.build_linear_generator(x_inverted_magspec)
     elif model.generator_type == "linear+pix2pix":
-      _temp_spec = model.build_linear_generator(x_mel_spec)
-      gen_mag_spec = model.build_linear_generator(_temp_spec)
+      _temp_spec = model.build_linear_generator(x_melspec)
+      gen_magspec = model.build_linear_generator(_temp_spec)
     elif model.generator_type == "interp+pix2pix":
-      _temp_spec = tf.image.resize_images(x_mel_spec, 
+      _temp_spec = tf.image.resize_images(x_melspec, 
         [model.subseq_len, 513])
-      gen_mag_spec = model.build_linear_generator(_temp_spec)
+      gen_magspec = model.build_linear_generator(_temp_spec)
     else:
       raise NotImplementedError()
 
     G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
 
-  gen_loss_L1 = tf.reduce_mean(tf.abs(x_mag_spec - gen_mag_spec))
+  gen_loss_L1 = tf.reduce_mean(tf.abs(x_magspec - gen_magspec))
   gan_step = tf.train.get_or_create_global_step()
   gan_saver = tf.train.Saver(var_list=G_vars + [gan_step], max_to_keep=1)
 
@@ -159,7 +159,7 @@ def eval(fps, args):
 
         while True:
           try:
-            _gen_loss_L1, _gen_mag_spec, _x_mag_spec = sess.run([gen_loss_L1, gen_mag_spec, x_mag_spec])
+            _gen_loss_L1, _gen_magspec, _x_magspec = sess.run([gen_loss_L1, gen_magspec, x_magspec])
           except tf.errors.OutOfRangeError:
             break
 
@@ -203,7 +203,7 @@ def infer(fps, args):
   print('-' * 80)
 
   with tf.name_scope('loader'):
-    x_mag_spec, x_wav = decode_extract_and_batch(
+    x_magspec, x_wav = decode_extract_and_batch(
       fps,
       batch_size=args.infer_batch_size,
       subseq_len= model.subseq_len,
@@ -212,7 +212,7 @@ def infer(fps, args):
       audio_normalize=args.audio_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
-      extract_type='mag_spec',
+      extract_type='magspec',
       extract_parallel_calls=8,
       repeat=False,
       shuffle=False,
@@ -224,21 +224,21 @@ def infer(fps, args):
       prefetch_gpu_num=0)
 
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
-  x_mel_spec = spectral.mag_to_mel_linear_spec(x_mag_spec)
-  x_inverted_mag_spec = spectral.mel_linear_to_mag_spec(x_mel_spec, transform = 'inverse')
+  x_melspec = spectral.mag_to_mel_linear_spec(x_magspec)
+  x_inverted_magspec = spectral.mel_linear_to_magspec(x_melspec, transform = 'inverse')
 
   with tf.variable_scope("generator") as vs:
     if model.generator_type == "pix2pix":
-      gen_mag_spec = model.build_generator(x_inverted_mag_spec)
+      gen_magspec = model.build_generator(x_inverted_magspec)
     elif model.generator_type == "linear":
-      gen_mag_spec = model.build_linear_generator(x_inverted_mag_spec)
+      gen_magspec = model.build_linear_generator(x_inverted_magspec)
     elif model.generator_type == "linear+pix2pix":
-      _temp_spec = model.build_linear_generator(x_mel_spec)
-      gen_mag_spec = model.build_linear_generator(_temp_spec)
+      _temp_spec = model.build_linear_generator(x_melspec)
+      gen_magspec = model.build_linear_generator(_temp_spec)
     elif model.generator_type == "interp+pix2pix":
-      _temp_spec = tf.image.resize_images(x_mel_spec, 
+      _temp_spec = tf.image.resize_images(x_melspec, 
         [model.subseq_len, 513])
-      gen_mag_spec = model.build_linear_generator(_temp_spec)
+      gen_magspec = model.build_linear_generator(_temp_spec)
     else:
       raise NotImplementedError()
     G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=vs.name)
@@ -246,9 +246,9 @@ def infer(fps, args):
   step = tf.train.get_or_create_global_step()
   gan_saver = tf.train.Saver(var_list=G_vars + [step], max_to_keep=1)
   
-  input_audio = tf.py_func( spectral.audio_from_mag_spec, [x_inverted_mag_spec[0]], tf.float32, stateful=False)
-  target_audio = tf.py_func( spectral.audio_from_mag_spec, [x_mag_spec[0]], tf.float32, stateful=False)
-  gen_audio = tf.py_func( spectral.audio_from_mag_spec, [gen_mag_spec[0]], tf.float32, stateful=False)
+  input_audio = tf.py_func( spectral.audio_from_magspec, [x_inverted_magspec[0]], tf.float32, stateful=False)
+  target_audio = tf.py_func( spectral.audio_from_magspec, [x_magspec[0]], tf.float32, stateful=False)
+  gen_audio = tf.py_func( spectral.audio_from_magspec, [gen_magspec[0]], tf.float32, stateful=False)
 
   # dont know why i rehspae them this way. just following past convention.
   input_audio = tf.reshape(input_audio, [1, -1, 1, 1] )
@@ -279,10 +279,10 @@ def infer(fps, args):
         try:
           _summaries, mel_np, est_np, act_np, gen_np = sess.run([
             summaries,
-            x_mel_spec,
-            x_inverted_mag_spec,
-            x_mag_spec,
-            gen_mag_spec
+            x_melspec,
+            x_inverted_magspec,
+            x_magspec,
+            gen_magspec
             ])
           summary_writer.add_summary(_summaries, _step)
           
@@ -306,10 +306,10 @@ def infer(fps, args):
             try:
               _summaries, mel_np, est_np, act_np, gen_np = sess.run([
                 summaries,
-                x_mel_spec,
-                x_inverted_mag_spec,
-                x_mag_spec,
-                gen_mag_spec
+                x_melspec,
+                x_inverted_magspec,
+                x_magspec,
+                gen_magspec
               ])
               summary_writer.add_summary(_summaries, _step)
 
