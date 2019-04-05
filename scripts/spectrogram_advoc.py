@@ -11,6 +11,7 @@ if __name__ == '__main__':
   from advoc.spectral import r9y9_melspec_to_waveform, magspec_to_waveform_lws
   from advoc.spectral import create_inverse_mel_filterbank
 
+  #TODO move to advoc.spectral
   def tacotron_mel_to_mag(X_mel_dbnorm, invmeltrans):
     norm_min_level_db = -100
     norm_ref_level_db = 20
