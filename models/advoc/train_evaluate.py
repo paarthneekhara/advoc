@@ -5,17 +5,17 @@ from util import override_model_attrs
 import numpy as np
 import time
 import advoc.spectral
-from srezModel import SrezMelSpec
-from srezSmall import SrezMelSpec as SrezMelSpecSmall
+from advoc_model import Advoc
+from advoc_model_small import Advoc as AdvocSmall
 from spectral_util import SpectralUtil
 
 
 def train(fps, args):
   # Initialize model
   if args.model_type == "regular":
-    model = SrezMelSpec(Modes.TRAIN)
+    model = Advoc(Modes.TRAIN)
   elif args.model_type == "small":
-    model = SrezMelSpecSmall(Modes.TRAIN)
+    model = AdvocSmall(Modes.TRAIN)
   else:
     raise NotImplementedError()
 
@@ -76,9 +76,9 @@ def eval(fps, args):
     os.makedirs(eval_dir)
   
   if args.model_type == "regular":
-    model = SrezMelSpec(Modes.EVAL)
+    model = Advoc(Modes.EVAL)
   elif args.model_type == "small":
-    model = SrezMelSpecSmall(Modes.EVAL)
+    model = AdvocSmall(Modes.EVAL)
   else:
     raise NotImplementedError()
 
@@ -191,9 +191,9 @@ def infer(fps, args):
     os.makedirs(infer_dir)
 
   if args.model_type == "regular":
-    model = SrezMelSpec(Modes.INFER)
+    model = Advoc(Modes.INFER)
   elif args.model_type == "small":
-    model = SrezMelSpecSmall(Modes.INFER)
+    model = AdvocSmall(Modes.INFER)
   else:
     raise NotImplementedError()
 
