@@ -7,7 +7,7 @@ from spectral_util import SpectralUtil
 import numpy as np
 EPS = 1e-12
 
-class AdvocSmall(Model):
+class Advoc(Model):
   audio_fs = 22050
   subseq_len = 256
   n_mels = 80

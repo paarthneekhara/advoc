@@ -6,7 +6,7 @@ if __name__ == '__main__':
   import numpy as np
   import os
   from tqdm import tqdm
-
+  import tensorflow as tf
   from advoc.audioio import save_as_wav
   from advoc.spectral import r9y9_melspec_to_waveform, magspec_to_waveform_lws
   from advoc.spectral import create_inverse_mel_filterbank
@@ -78,7 +78,7 @@ if __name__ == '__main__':
       wave = r9y9_melspec_to_waveform(spec)
     else:
       subseq_len = args.subseq_len
-      X_mag = tacotron_mel_to_mag(spec[:,:,0])
+      X_mag = tacotron_mel_to_mag(spec[:,:,0], inv_mel_filterbank)
       x_mag_original_length = X_mag.shape[0]
       x_mag_target_length = int(X_mag.shape[0] / subseq_len ) * subseq_len + subseq_len
       X_mag = np.pad(X_mag, ([0,x_mag_target_length - X_mag.shape[0]], [0,0]), 'constant')

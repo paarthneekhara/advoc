@@ -50,7 +50,7 @@ def train(fps, args):
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
   
   x_melspec = spectral.mag_to_mel_linear_spec(x_magspec)
-  x_inverted_magspec = spectral.mel_linear_to_magspec(x_melspec, transform = 'inverse')
+  x_inverted_magspec = spectral.mel_linear_to_mag_spec(x_melspec, transform = 'inverse')
 
   model(x_inverted_magspec, x_magspec, x_wav, x_melspec)
 
@@ -110,7 +110,7 @@ def eval(fps, args):
   
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
   x_melspec = spectral.mag_to_mel_linear_spec(x_magspec)
-  x_inverted_magspec = spectral.mel_linear_to_magspec(x_melspec, transform = 'inverse')
+  x_inverted_magspec = spectral.mel_linear_to_mag_spec(x_melspec, transform = 'inverse')
 
   with tf.variable_scope("generator") as vs:
     if model.generator_type == "pix2pix":
@@ -225,7 +225,7 @@ def infer(fps, args):
 
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
   x_melspec = spectral.mag_to_mel_linear_spec(x_magspec)
-  x_inverted_magspec = spectral.mel_linear_to_magspec(x_melspec, transform = 'inverse')
+  x_inverted_magspec = spectral.mel_linear_to_mag_spec(x_melspec, transform = 'inverse')
 
   with tf.variable_scope("generator") as vs:
     if model.generator_type == "pix2pix":
