@@ -10,7 +10,6 @@ if __name__ == '__main__':
   from advoc.audioio import save_as_wav
   from advoc.spectral import r9y9_melspec_to_waveform, magspec_to_waveform_lws
   from advoc.spectral import create_inverse_mel_filterbank
-  from advoc.advoc
 
   def tacotron_mel_to_mag(X_mel_dbnorm, invmeltrans):
     norm_min_level_db = -100
