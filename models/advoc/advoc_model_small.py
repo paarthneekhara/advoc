@@ -5,15 +5,14 @@ import advoc.spectral
 import lws
 from spectral_util import SpectralUtil
 import numpy as np
-
 EPS = 1e-12
 
-class SrezMelSpec(Model):
+class Advoc(Model):
   audio_fs = 22050
   subseq_len = 256
   n_mels = 80
-  ngf = 64
-  ndf = 64
+  ngf = 32
+  ndf = 32
   gan_weight = 1. 
   l1_weight = 100.
   train_batch_size = 32
@@ -21,6 +20,7 @@ class SrezMelSpec(Model):
   use_adversarial = True #Train as a GAN or not
   separable_conv = False
   use_batchnorm = True
+  num_enc_layers = 7
   generator_type = "pix2pix" #pix2pix, linear, linear+pix2pix
 
 
@@ -105,6 +105,9 @@ class SrezMelSpec(Model):
       self.ngf * 8, # encoder_8: [batch, 2, 2, ngf * 8] => [batch, 1, 1, ngf * 8]
     ]
 
+    dec_layer_si = len(layer_specs) - self.num_enc_layers
+    layer_specs = layer_specs[:self.num_enc_layers]
+
     n_stride1_layers = 0 # number of decoder layer
     for out_channels in layer_specs:
       with tf.variable_scope("encoder_{}".format(len(layers) + 1)):
@@ -123,12 +126,13 @@ class SrezMelSpec(Model):
         (self.ngf * 8, 0.5),   # decoder_8: [batch, 1, 1, ngf * 8] => [batch, 2, 2, ngf * 8 * 2]
         (self.ngf * 8, 0.5),   # decoder_7: [batch, 2, 2, ngf * 8 * 2] => [batch, 4, 4, ngf * 8 * 2]
         (self.ngf * 8, 0.5),   # decoder_6: [batch, 4, 4, ngf * 8 * 2] => [batch, 8, 8, ngf * 8 * 2]
-        (self.ngf * 8, 0.0),   # decoder_5: [batch, 8, 8, ngf * 8 * 2] => [batch, 16, 16, ngf * 8 * 2]
-        (self.ngf * 4, 0.0),   # decoder_4: [batch, 16, 16, ngf * 8 * 2] => [batch, 32, 32, ngf * 4 * 2]
+        (self.ngf * 8, 0.5),   # decoder_5: [batch, 8, 8, ngf * 8 * 2] => [batch, 16, 16, ngf * 8 * 2]
+        (self.ngf * 4, 0.5),   # decoder_4: [batch, 16, 16, ngf * 8 * 2] => [batch, 32, 32, ngf * 4 * 2]
         (self.ngf * 2, 0.0),   # decoder_3: [batch, 32, 32, ngf * 4 * 2] => [batch, 64, 64, ngf * 2 * 2]
         (self.ngf, 0.0),       # decoder_2: [batch, 64, 64, ngf * 2 * 2] => [batch, 128, 128, ngf * 2]
     ]
 
+    layer_specs = layer_specs[dec_layer_si:]
     num_encoder_layers = len(layers)
     for decoder_layer, (out_channels, dropout) in enumerate(layer_specs):
       skip_layer = num_encoder_layers - decoder_layer - 1
