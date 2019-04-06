@@ -4,7 +4,11 @@ Code from our paper *Expediting TTS Synthesis with Adversarial Vocoding*. Sound 
 
 ## Installation
 
-There are multiple training scripts in this repository, but they all require the lightweight `advoc` package. This package is a well-tested set of modules which handle audio IO, spectral processing, and heuristic vocoding in both `numpy` and `tensorflow`. To install globally, use `sudo pip install -e .` from this directory. To install in a virtual environment, follow these instructions:
+There are multiple training scripts in this repository, but they all require the lightweight `advoc` package. This package is a well-tested set of modules which handle audio IO, spectral processing, and heuristic vocoding in both `numpy` and `tensorflow`.
+
+To install globally, use `sudo pip install -e .` from this directory.
+
+To install in a virtual environment, follow these instructions:
 
 ```
 virtualenv -p python3 --no-site-packages advoc
@@ -15,21 +19,19 @@ cd advoc
 pip install -e .
 ```
 
-### Testing
-
 To run our suite of tests to affirm reproducibility of our feature representations, heuristic inversion code, etc. run:
 
 `python setup.py test`
 
 ## Adversarial Vocoder (advoc)
 
-### Pretrained checkpoint
-
-Coming soon.
+Instructions coming soon. Pretrained checkpoints at bottom for the ambitious.
 
 ## Mel spectrogram GAN
 
-Adversarial vocoding can be used to factorize unsupervised generation of audio into `P(spectrogram) * P(audio | spectrogram)`. This is useful because there are many GAN primitives for generating images, and spectrograms are (somewhat) image-like. In our paper, we show that this factorized strategy can be used to achieve state-of-the-art results on unsupervised generation of small-vocabulary speech.
+Adversarial vocoding can be used to factorize unsupervised generation of audio into `P(spectrogram) * P(audio | spectrogram)`. This is useful because there are many GAN primitives for generating images, and spectrograms are (somewhat) image-like, so we can leverage pre-existing work. In our paper, we show that this factorized strategy can be used to achieve state-of-the-art results on unsupervised generation of small-vocabulary speech.
+
+### Training a new model
 
 To train a mel spectrogram GAN, first [download the SC09 dataset](http://deepyeti.ucsd.edu/cdonahue/wavegan/data/sc09.tar.gz) and unzip to `models/melspecgan/data`. Then, run the following from this directory:
 
@@ -41,6 +43,11 @@ python train.py train \
   --data_dir ./data/sc09/train \
 ```
 
-### Pretrained checkpoint
+## Pretrained checkpoints
 
-Coming soon.
+- [LJSpeech Advoc Mel80](https://drive.google.com/open?id=1fyYugd73xofb6jU2m4GoKbCOVBaYc-zH)
+- [LJSpeech Advoc Mel40](https://drive.google.com/open?id=1YAqCHrlDThpL71uZqSKa4onohOHKfO8H)
+- [LJSpeech Advoc Mel20](https://drive.google.com/open?id=1uLTtY4PH6BC-DAmBWS0WZAHy7YVTo-ZI)
+- [LJSpeech Advoc (small) Mel80](https://drive.google.com/open?id=126qWSsW7W8ofowETA4bFUjqddUzU7fhb)
+- [SC09 MelSpecGan Mel80](https://drive.google.com/open?id=12X7B6bup2ObFckYlZt_14GFLFYdQcX-a)
+- [SC09 Advoc Mel80](https://drive.google.com/open?id=1oNBB-MSP28uHkqVOtYa6c3AfAQyEQZ0b)
