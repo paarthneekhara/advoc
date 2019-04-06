@@ -23,9 +23,70 @@ To run our suite of tests to affirm reproducibility of our feature representatio
 
 `python setup.py test`
 
-## Adversarial Vocoder (advoc)
+## Adversarial Vocoder (AdVoc)
 
-Instructions coming soon. Pretrained checkpoints at bottom for the ambitious.
+### Training
+To reproduce the experiments in our paper, [download the LJ Speech Dataset][https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2] and extract the ```.wav``` files to ```models/advoc/data/ljspeech/wavs```. Split this data into training, validation and test sets using ```scripts/data_split.py``` as follows:
+
+
+```
+cd scripts
+python data_split.py \
+--source_dir models/advoc/data/ljspeech/wavs \
+--out_dir models/advoc/data/ljspeech/wavs_split
+```
+
+This script should create ```train, valid and test``` directories in ```models/advoc/data/ljspeech/wavs_split```.
+
+Train the the adversarial vocoder model on the training set as follows:
+
+```
+cd models/advoc
+WORK_DIR=./train
+python train.py train \
+  ${WORK_DIR} \
+  --data_dir ./data/ljspeech/wavs_split/train \
+  --data_fastwav \
+```
+
+To train the smaller version of adversarial vocoder (AdVoc-small) add the argument use:
+
+```
+python train_evaluate.py train \
+  ${WORK_DIR} \
+  --data_dir ./data/ljspeech/wavs_split/train \
+  --data_fastwav \
+  --model_type small
+```
+
+
+### Inference
+
+Generate mel-spectrograms for audio files from the test dataset using ```scripts/audio_to_spectrogram.py``` as follows:
+
+```
+cd scripts
+python audio_to_spectrogram.py \
+--wave_dir ../models/advoc/data/ljspeech/wavs_split/test \
+--out_dir ../models/advoc/data/ljspeech/mel_specs/test \
+--data_fast_wav
+```
+
+The above command should save the extracted mel-spectrogram features to ```models/advoc/data/ljspeech/mel_specs/test```
+
+To vocode mel-spectrograms using a pretrained model, use ```scripts/spectrogram_advoc.py```:
+
+```
+cd scripts
+python spectrogram_advoc.py \
+--spec_dir ../models/advoc/data/ljspeech/mel_specs/test \
+--out_dir ../models/advoc/data/ljspeech/vocoded_output/test \
+--model_ckpt <PATH TO PRETRAINED CKPT>
+--meta_fp <PATH TO MODEL METAGRAPH>
+```
+
+The above command should save the vocoded audio in ```models/advoc/data/ljspeech/vocoded_output/test```.
+
 
 ## Mel spectrogram GAN
 
