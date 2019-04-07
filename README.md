@@ -61,7 +61,7 @@ python train_evaluate.py train \
   --model_type small
 ```
 
-### Monitoring and continuous evaluation
+#### Monitoring and continuous evaluation
 Training logs can be visualized and audio samples can be listened to by launching tensorboard in the ```WORK_DIR``` as follows:
 
 ```
@@ -70,7 +70,7 @@ tensorboard --logdir=${WORK_DIR}$
 
 To back up checkpoints every hour (GAN training may occasionally collapse so it's good to have backups)
 
-```python backup.py ./train 60```
+```python backup.py $WORK_DIR$ 60```
 
 
 To evaluate each checkpoint on the validation set, run the following:
