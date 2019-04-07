@@ -14,13 +14,12 @@ class Advoc(Model):
   ngf = 32
   ndf = 32
   gan_weight = 1. 
-  l1_weight = 100.
+  l1_weight = 10.
   train_batch_size = 32
   eval_batch_size = 1
-  use_adversarial = True #Train as a GAN or not
   separable_conv = False
-  use_batchnorm = True
-  num_enc_layers = 7
+  use_batchnorm = False
+  num_enc_layers = 4
   generator_type = "pix2pix" #pix2pix, linear, linear+pix2pix
 
 
