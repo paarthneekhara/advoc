@@ -26,7 +26,7 @@ To run our suite of tests to affirm reproducibility of our feature representatio
 ## Adversarial Vocoder (AdVoc)
 
 ### Training
-To reproduce the experiments in our paper, [download the LJ Speech Dataset][https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2] and extract the ```.wav``` files to ```models/advoc/data/ljspeech/wavs```. Split this data into training, validation and test sets using ```scripts/data_split.py``` as follows:
+To train the adversarial vocoder model on the LJ Speech Dataset, [download the data](https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2) and extract the ```.wav``` files intto ```models/advoc/data/ljspeech/wavs```. Split this data into training, validation and test sets using ```scripts/data_split.py``` as follows:
 
 
 ```
@@ -38,7 +38,7 @@ python data_split.py \
 
 This script should create ```train, valid and test``` directories in ```models/advoc/data/ljspeech/wavs_split```.
 
-Train the the adversarial vocoder model on the training set as follows:
+Train the the adversarial vocoder model (AdVoc) on the training set as follows:
 
 ```
 cd models/advoc
@@ -49,7 +49,7 @@ python train.py train \
   --data_fastwav \
 ```
 
-To train the smaller version of adversarial vocoder (AdVoc-small) add the argument use:
+To train the smaller version of adversarial vocoder (AdVoc-small) use:
 
 ```
 python train_evaluate.py train \
@@ -60,9 +60,15 @@ python train_evaluate.py train \
 ```
 
 
+Training logs can be visualized and audio samples can be listened to by launching tensorboard in the ```WORK_DIR``` as follows:
+
+```cd ${WORK_DIR}$
+tensorboard --logdir .
+```
+
 ### Inference
 
-Generate mel-spectrograms for audio files from the test dataset using ```scripts/audio_to_spectrogram.py``` as follows:
+Extract mel-spectrograms for audio files from the test dataset using ```scripts/audio_to_spectrogram.py``` as follows:
 
 ```
 cd scripts
@@ -72,9 +78,9 @@ python audio_to_spectrogram.py \
 --data_fast_wav
 ```
 
-The above command should save the extracted mel-spectrogram features to ```models/advoc/data/ljspeech/mel_specs/test```
+Running this script should save the extracted mel-spectrogram in ```models/advoc/data/ljspeech/mel_specs/test``` as ```.npy``` files. 
 
-To vocode mel-spectrograms using a pretrained model, use ```scripts/spectrogram_advoc.py```:
+The mel-spectrograms can be vocoded either using the pre-trained models provided at the bottom of this page or training the model from scratch using the steps given above. To vocode mel-spectrograms from an AdVoc checkpoint, use ```scripts/spectrogram_advoc.py```:
 
 ```
 cd scripts

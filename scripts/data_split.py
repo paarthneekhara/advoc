@@ -7,7 +7,7 @@ if __name__ == '__main__':
 
   parser = ArgumentParser()
   parser.add_argument('--source_dir', type=str)
-  parser.add_argument('--our_dir', type=str)
+  parser.add_argument('--out_dir', type=str)
   
   parser.set_defaults(
     out_dir=None,
