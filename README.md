@@ -43,6 +43,7 @@ Train the the adversarial vocoder model (AdVoc) on the training set as follows:
 ```
 cd models/advoc
 WORK_DIR=./train
+export CUDA_VISIBLE_DEVICES="0"
 python train.py train \
   ${WORK_DIR} \
   --data_dir ./data/ljspeech/wavs_split/train \
@@ -52,19 +53,36 @@ python train.py train \
 To train the smaller version of adversarial vocoder (AdVoc-small) use:
 
 ```
+export CUDA_VISIBLE_DEVICES="0"
 python train_evaluate.py train \
-  ${WORK_DIR} \
+  ${WORK_DIR}$ \
   --data_dir ./data/ljspeech/wavs_split/train \
   --data_fastwav \
   --model_type small
 ```
 
-
+### Monitoring and continuous evaluation
 Training logs can be visualized and audio samples can be listened to by launching tensorboard in the ```WORK_DIR``` as follows:
 
-```cd ${WORK_DIR}$
-tensorboard --logdir .
 ```
+tensorboard --logdir=${WORK_DIR}$
+```
+
+To back up checkpoints every hour (GAN training may occasionally collapse so it's good to have backups)
+
+```python backup.py ./train 60```
+
+
+To evaluate each checkpoint on the validation set, run the following:
+```
+export CUDA_VISIBLE_DEVICES="-1"
+python train_evaluate.py eval \
+  ${WORK_DIR}$ \
+  --data_dir ./data/ljspeech/wavs_split/valid \
+  --data_fastwav \
+```
+
+
 
 ### Inference
 
