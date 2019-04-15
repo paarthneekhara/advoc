@@ -13,7 +13,7 @@ To install in a virtual environment, follow these instructions:
 ```
 virtualenv -p python3 --no-site-packages advoc
 cd advoc
-git clone git@github.com:paarthneekhara/advoc.git
+git clone https://github.com/paarthneekhara/advoc.git
 source bin/activate
 cd advoc
 pip install -e .
