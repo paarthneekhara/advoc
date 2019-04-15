@@ -8,47 +8,57 @@ from advoc.spectral import waveform_to_melspec_tf, stft_tf
 def decode_extract_and_batch(
     fps,
     batch_size,
-    subseq_len,
+    slice_len,
     audio_fs=22050,
     audio_mono=True,
-    audio_normalize=True,
+    audio_normalize=False,
     decode_fastwav=False,
     decode_parallel_calls=1,
-    extract_type='magspec',
+    extract_type=None,
     extract_nfft=1024,
     extract_nhop=256,
-    extract_parallel_calls=4,
+    extract_parallel_calls=1,
     repeat=False,
     shuffle=False,
     shuffle_buffer_size=None,
-    subseq_randomize_offset=False,
-    subseq_overlap_ratio=0,
-    subseq_pad_end=False,
+    slice_first_only=False,
+    slice_randomize_offset=False,
+    slice_overlap_ratio=0,
+    slice_pad_end=False,
     prefetch_size=None,
     prefetch_gpu_num=None):
-  """Decodes audio file paths into mini-batches of samples.
+  """Decodes audio files directly into [b, slice_len, nfeats, nch] batches.
+
+  This is a monstrous function signature. However, this method needs to do a 
+  lot of stuff and there's no useful intermediate results, so we made it one
+  big block. It is a bit cumbersome to configure but the functionality of 
+  decoding directly into tensors is convenient enough to merit this.
 
   Args:
     fps: List of audio file paths.
     batch_size: Number of items in the batch.
-    subseq_len: Length of the subsequences in feature timesteps.
+    slice_len: Length of the slices. If extract_type=None this is samples.
     audio_fs: Sample rate for decoded audio files.
     audio_mono: If false, preserves multichannel (all files must have same).
-    audio_normalize: If false, do not normalize audio waveforms.
-    decode_fastwav: If true, uses scipy to decode standard wav files.
+    audio_normalize: If true, normalize audio waveforms.
+    decode_fastwav: If true, uses scipy to quickly decode standard wav files.
     decode_parallel_calls: Number of parallel decoding threads.
-    extract_type: Type of features to extract (None for no feature extraction).
+    extract_type: Type of spectral features to extract: None, magspec, melspec.
     extract_nfft: STFT window size for feature extraction.
     extract_nhop: STFT hop size for feature extraction.
     extract_parallel_calls: Number of parallel extraction threads.
     repeat: If true (for training), continuously iterate through the dataset.
-    shuffle: If true (for training), buffer and shuffle the subsequences.
-    subseq_randomize_offset: If true, randomize starting position for subseq.
-    subseq_overlap_ratio: Ratio of overlap between feature slices.
-    subseq_pad_end: If true, zero pad features.
+    shuffle: If true (for training), buffer and shuffle the slices.
+    shuffle_buffer_size: Size of buffer for shuffling.
+    slice_first_only: If true, only use first slice from each audio file.
+    slice_randomize_offset: If true, randomize starting position for slice.
+    slice_overlap_ratio: Ratio of overlap between feature slices.
+    slice_pad_end: If true, zero pad features.
+    prefetch_size: If a number, prefetch this many batches.
+    prefetch_gpu_num: If a number, prefetch to this GPU num.
 
   Returns:
-    A tuple of np.float32 tensors representing audio and feature subsequences.
+    A tuple of np.float32 tensors representing audio and feature slices.
       audio: [batch_size, ?, 1, nch]
       features: [batch_size, ? // nhop, nfeats, nch]
   """
@@ -88,7 +98,7 @@ def decode_extract_and_batch(
   # Extract features
   if extract_type is None:
     feature_fs = audio_fs
-    subseq_pad_val = 0.
+    slice_pad_val = 0.
     dataset = dataset.map(lambda x: (x, x))
   elif extract_type == 'melspec':
     def _extract_feats_shaped(wav):
@@ -99,7 +109,7 @@ def decode_extract_and_batch(
           nhop=extract_nhop)[0]
 
     feature_fs = audio_fs / extract_nhop
-    subseq_pad_val = 0.
+    slice_pad_val = 0.
     dataset = dataset.map(
         lambda x: (_extract_feats_shaped(x), x),
         num_parallel_calls=extract_parallel_calls)
@@ -112,7 +122,7 @@ def decode_extract_and_batch(
       return tf.abs(spec)
 
     feature_fs = audio_fs / extract_nhop
-    subseq_pad_val = 0.
+    slice_pad_val = 0.
     dataset = dataset.map(
         lambda x: (_extract_feats_shaped(x), x),
         num_parallel_calls=extract_parallel_calls)
@@ -120,30 +130,22 @@ def decode_extract_and_batch(
     raise ValueError()
 
   # Extract paired audio and features
-  def _parallel_subseq(features, audio):
+  def _parallel_slice(features, audio):
     # Calculate hop size
-    assert subseq_overlap_ratio >= 0
-    subseq_hop = int(round(subseq_len * (1. - subseq_overlap_ratio)))
-    if subseq_hop < 1:
+    if slice_overlap_ratio < 0:
+      raise ValueError('Slice overlap must be nonnegative')
+    slice_hop = int(round(slice_len * (1. - slice_overlap_ratio)))
+    if slice_hop < 1:
       raise ValueError('Overlap ratio too high')
 
     # Audio is [nsamps, 1, nch] at audio_fs Hz
     # Features is [ntsteps, ?, nch] at feature_fs Hz
     # Calculate ratio which is equal to the number of samples per tstep.
     nsamps_per_tstep = float(audio_fs) / float(feature_fs)
-    audio_subseq_len = subseq_len * nsamps_per_tstep
-    audio_subseq_len = int(round(audio_subseq_len) + 1e-4)
-    audio_subseq_hop = subseq_hop * nsamps_per_tstep
-    audio_subseq_hop = int(round(audio_subseq_hop) + 1e-4)
-
-    """
-    print(audio_fs)
-    print(audio_subseq_len)
-    print(audio_subseq_hop)
-    print(feature_fs)
-    print(subseq_len)
-    print(subseq_hop)
-    """
+    audio_slice_len = slice_len * nsamps_per_tstep
+    audio_slice_len = int(round(audio_slice_len) + 1e-4)
+    audio_slice_hop = slice_hop * nsamps_per_tstep
+    audio_slice_hop = int(round(audio_slice_hop) + 1e-4)
 
     # Retrieve nsamps and ntsteps
     # TODO: Check that these values are sane wrt audio_fs and feature_fs.
@@ -151,52 +153,47 @@ def decode_extract_and_batch(
     ntsteps = tf.shape(features)[0]
 
     # Randomize starting phase:
-    if subseq_randomize_offset:
-      start = tf.random_uniform([], maxval=subseq_len, dtype=tf.int32)
+    if slice_randomize_offset:
+      start = tf.random_uniform([], maxval=slice_len, dtype=tf.int32)
       start_audio = tf.cast(start, np.float32) * nsamps_per_tstep
       start_audio = tf.cast(tf.round(start_audio + 1e-4), np.int32)
       audio = audio[start_audio:]
       features = features[start:]
 
-    # Extract subsequences
-    # TODO: Only compute subseqs once when not extracting features
-    feature_subseqs = tf.contrib.signal.frame(
+    # Extract slices
+    # TODO: Only compute slices once when not extracting features
+    feature_slices = tf.contrib.signal.frame(
         features,
-        subseq_len,
-        subseq_hop,
-        pad_end=subseq_pad_end,
-        pad_value=subseq_pad_val,
+        slice_len,
+        slice_hop,
+        pad_end=slice_pad_end,
+        pad_value=slice_pad_val,
         axis=0)
-    audio_subseqs = tf.contrib.signal.frame(
+    audio_slices = tf.contrib.signal.frame(
         audio,
-        audio_subseq_len,
-        audio_subseq_hop,
-        pad_end=subseq_pad_end,
+        audio_slice_len,
+        audio_slice_hop,
+        pad_end=slice_pad_end,
         pad_value=0,
         axis=0)
 
-    # TODO: Make sure first dim is equal (same number of subseqs)
-    """
-    print_op = tf.print(
-        tf.shape(audio),
-        tf.shape(features),
-        tf.shape(audio_subseqs),
-        tf.shape(feature_subseqs))
-    with tf.control_dependencies([print_op]):
-      audio_subseqs = tf.identity(audio_subseqs)
-    """
+    if slice_first_only:
+      feature_slices = feature_slices[:1]
+      audio_slices = audio_slices[:1]
 
-    return feature_subseqs, audio_subseqs
+    # TODO: Make sure first dim is equal (same number of slices)
 
-  def _parallel_subseq_dataset_wrapper(features, audio):
-    feature_subseqs, audio_subseqs = _parallel_subseq(features, audio)
+    return feature_slices, audio_slices
+
+  def _parallel_slice_dataset_wrapper(features, audio):
+    feature_slices, audio_slices = _parallel_slice(features, audio)
     return tf.data.Dataset.zip((
-      tf.data.Dataset.from_tensor_slices(feature_subseqs),
-      tf.data.Dataset.from_tensor_slices(audio_subseqs),
+      tf.data.Dataset.from_tensor_slices(feature_slices),
+      tf.data.Dataset.from_tensor_slices(audio_slices),
     ))
 
-  # Extract parallel subsequences from both audio and features
-  dataset = dataset.flat_map(_parallel_subseq_dataset_wrapper)
+  # Extract parallel slices from both audio and features
+  dataset = dataset.flat_map(_parallel_slice_dataset_wrapper)
 
   # Shuffle examples
   if shuffle:
