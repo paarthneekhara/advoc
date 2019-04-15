@@ -19,6 +19,7 @@ setup(
       'lws==1.2',
       'numpy>=1.16.0',
       'scipy>=1.0.0',
+      'tqdm>=4.31.1'
     ],
     test_suite='tests'
 )
