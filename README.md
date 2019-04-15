@@ -44,10 +44,10 @@ Train the the adversarial vocoder model (AdVoc) on the training set as follows:
 cd models/advoc
 WORK_DIR=./train
 export CUDA_VISIBLE_DEVICES="0"
-python train.py train \
+python train_evaluate.py train \
   ${WORK_DIR} \
   --data_dir ./data/ljspeech/wavs_split/train \
-  --data_fastwav \
+  --data_fastwav
 ```
 
 To train the smaller version of adversarial vocoder (AdVoc-small) use:
