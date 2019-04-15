@@ -15,7 +15,7 @@ class Advoc(Model):
   ndf = 32
   gan_weight = 1. 
   l1_weight = 10.
-  train_batch_size = 32
+  train_batch_size = 8
   eval_batch_size = 1
   separable_conv = False
   use_batchnorm = False
