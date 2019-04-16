@@ -160,6 +160,17 @@ To train on a different dataset, see [here](#dataset-configuration).
 
 ### Inference
 
+To generate mel spectrograms of spoken digits with MelspecGAN, first [download our pretrained checkpoint](https://drive.google.com/open?id=1oNBB-MSP28uHkqVOtYa6c3AfAQyEQZ0b) and extract to `scripts/sc09_melspecgan`. Then, use `scripts/generate_spectrogram.py` as follows:
+
+```
+cd scripts
+python generate_spectrogram.py \
+  --out_dir ./melspecgan_gen \
+  --ckpt_fp ./sc09_melspecgan/best_score-55089 \
+  --n 1000 \
+```
+
+
 TODO
 
 ## Dataset configuration
