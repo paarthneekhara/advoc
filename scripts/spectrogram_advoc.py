@@ -24,9 +24,9 @@ if __name__ == '__main__':
   parser = ArgumentParser()
 
   parser.add_argument('--spec_dir', type=str, required=True,
-      help='Directory of audio files')
+      help='Directory of spectrograms')
   parser.add_argument('--out_dir', type=str, required=True,
-      help='Directory for spectrograms')
+      help='Directory for audio files')
   parser.add_argument('--model_ckpt', type=str,
       help='Adversarial vocoder checkpoint')
   parser.add_argument('--meta_fp', type=str,

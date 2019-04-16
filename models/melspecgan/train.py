@@ -153,6 +153,30 @@ def train(fps, args):
       sess.run(G_train_op)
 
 
+def infer(args):
+  zgen_n = tf.placeholder(tf.int32, [], name='samp_z_n')
+  zgen = tf.random.normal([zgen_n, Z_DIM], dtype=tf.float32, name='samp_z')
+
+  z = tf.placeholder(tf.float32, [None, Z_DIM], name='z')
+  with tf.variable_scope('G'):
+    G = MelspecGANGenerator()
+    G_z = G(z, training=False)
+  G_z = feats_denorm(G_z)
+  G_z = tf.identity(G_z, name='G_z')
+  G_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='G')
+  step = tf.train.get_or_create_global_step()
+  saver = tf.train.Saver(var_list=G_vars + [step])
+
+  tf.train.write_graph(tf.get_default_graph(), args.train_dir, 'infer.pbtxt')
+
+  tf.train.export_meta_graph(
+    filename=os.path.join(args.train_dir, 'infer.meta'),
+    clear_devices=True,
+    saver_def=saver.as_saver_def())
+
+  tf.reset_default_graph()
+
+
 """
   Computes inception score every time a checkpoint is saved
 """
@@ -331,6 +355,7 @@ if __name__ == '__main__':
     if len(fps) == 0:
       raise ValueError('Found no audio files in {}'.format(args.data_dir))
     print('Found {} audio files'.format(len(fps)))
+    infer(args)
     train(fps, args)
   elif args.mode == 'incept':
     incept(args)

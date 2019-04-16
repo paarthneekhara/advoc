@@ -160,17 +160,27 @@ To train on a different dataset, see [here](#dataset-configuration).
 
 ### Inference
 
-TODO
+To generate mel spectrograms of spoken digits with MelspecGAN, first [download our pretrained checkpoint](https://drive.google.com/open?id=1oNBB-MSP28uHkqVOtYa6c3AfAQyEQZ0b) and extract to `scripts/sc09_melspecgan`. Then, use `scripts/generate_spectrogram.py` as follows:
+
+```
+cd scripts
+python generate_spectrogram.py \
+  --out_dir ./melspecgan_gen \
+  --ckpt_fp ./sc09_melspecgan/best_score-55089 \
+  --n 1000 \
+```
+
+You can also run on a MelspecGAN you trained by changing `--ckpt_fp`.
 
 ## Dataset configuration
 
 Both models in this repository (MelspecGAN and Adversarial Vocoder) use configuration files to set data processing properties appropriate for particular datasets. These configuration files affect the loader which streams batches of examples directly from audio files (requires no preprocessing). The loader works by decoding individual audio files and extracting a variable number of "slices" (fixed-length examples) from each.
 
-We provide configuration files for LJSpeech (`datacfg/ljspeech.txt`) and SC09 (`datacfg/sc09.txt`), but you may need to create your own if you want to use a different dataset. If you create one, you will need to set the following properties in the cfg file:
+We provide configuration files for LJSpeech (`datacfg/ljspeech.txt`) and SC09 (`datacfg/sc09.txt`), but you may need to create your own if you want to use a different dataset. If you create one, you will need to set the following properties in the config file:
 
 - `sample_rate`: The number of audio samples per second.
+- `fastwav`: Set to `1` to use `scipy` to load WAV files, `0` to use `librosa` to load arbitrary audio files. Scipy is faster but only works for standard WAV files (16-bit PCM or 32-bit float), and does not support resampling. Librosa is slower but supports many types of audio files and resampling.
 - `normalize`: Set to `1` to normalize each audio file, `0` to skip normalization.
-- `fastwav`: Set to `1` to use `scipy` to load WAV files, `0` to use librosa to load arbitrary audio files. Scipy is faster but only works for standard WAV files (16-bit PCM or 32-bit float), and does not support resampling. Librosa is slower but supports many types of audio files and resampling.
 - `slice_first_only`: Set to `1` to only use the first slice from each audio file, `0` to use as many slices as possible. Enabling this is appropriate for sound effects datasets, disabling is appropriate for datasets of longer audio files.
 - `slice_randomize_offset`: Set to `1` to randomize the starting position for slicing, `0` to always start at the beginning. Enabling this is more appropriate for datasets of longer audio files.
 - `slice_pad_end`: Set to `1` to zero-pad the end of each audio file to produce as many slices as possible, `0` to ignore incomplete slices at the end of each audio file.

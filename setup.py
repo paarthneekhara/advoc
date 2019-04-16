@@ -15,7 +15,7 @@ setup(
     packages=find_packages(),
     install_requires=[
       'numpy>=1.16.0',
-      'tensorflow-gpu==1.13.1',
+      'tensorflow-gpu<=1.13.1',
       'librosa==0.6.3',
       'lws==1.2',
       'tqdm>=4.31.1',
