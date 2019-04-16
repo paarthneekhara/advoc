@@ -1,0 +1,7 @@
+sample_rate,16000
+normalize,1
+fastwav,1
+slice_first_only,1
+slice_randomize_offset,0
+slice_overlap_ratio,0.
+slice_pad_end,1

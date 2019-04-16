@@ -10,11 +10,9 @@ from advoc.spectral import r9y9_melspec_to_waveform
 from conv2d import MelspecGANGenerator, MelspecGANDiscriminator
 from util import feats_to_uint8_img, feats_to_approx_audio, feats_norm, feats_denorm
 
-
 TRAIN_BATCH_SIZE = 64
 TRAIN_LOSS = 'wgangp'
 Z_DIM = 100
-FS = 16000
 
 def train(fps, args):
   # Load data
@@ -22,29 +20,32 @@ def train(fps, args):
     x, x_audio = decode_extract_and_batch(
         fps=fps,
         batch_size=TRAIN_BATCH_SIZE,
-        subseq_len=64,
-        audio_fs=FS,
+        slice_len=64,
+        audio_fs=args.data_sample_rate,
         audio_mono=True,
-        audio_normalize=True,
-        decode_fastwav=True,
+        audio_normalize=args.data_normalize,
+        decode_fastwav=args.data_fastwav,
         decode_parallel_calls=8,
         extract_type='melspec',
+        extract_nfft=1024,
+        extract_nhop=256,
         extract_parallel_calls=8,
         repeat=True,
         shuffle=True,
         shuffle_buffer_size=512,
-        subseq_randomize_offset=False,
-        subseq_overlap_ratio=0,
-        subseq_pad_end=True,
+        slice_first_only=args.data_slice_first_only,
+        slice_randomize_offset=args.data_slice_randomize_offset,
+        slice_overlap_ratio=args.data_slice_overlap_ratio,
+        slice_pad_end=args.data_slice_pad_end,
         prefetch_size=TRAIN_BATCH_SIZE * 8,
         prefetch_gpu_num=args.data_prefetch_gpu_num)
     x = feats_norm(x)
 
   # Data summaries
-  tf.summary.audio('x_audio', x_audio[:, :, 0], FS)
+  tf.summary.audio('x_audio', x_audio[:, :, 0], args.data_sample_rate)
   tf.summary.image('x', feats_to_uint8_img(feats_denorm(x)))
   tf.summary.audio('x_inv_audio',
-      feats_to_approx_audio(feats_denorm(x), FS, 16384, n=3)[:, :, 0], FS)
+      feats_to_approx_audio(feats_denorm(x), args.data_sample_rate, 16384, n=3)[:, :, 0], args.data_sample_rate)
 
   # Make z vector
   z = tf.random.normal([TRAIN_BATCH_SIZE, Z_DIM], dtype=tf.float32)
@@ -58,7 +59,7 @@ def train(fps, args):
   # Summarize G_z
   tf.summary.image('G_z', feats_to_uint8_img(feats_denorm(G_z)))
   tf.summary.audio('G_z_inv_audio',
-      feats_to_approx_audio(feats_denorm(G_z), FS, 16384, n=3)[:, :, 0], FS)
+      feats_to_approx_audio(feats_denorm(G_z), args.data_sample_rate, 16384, n=3)[:, :, 0], args.data_sample_rate)
 
   # Make real discriminator
   D = MelspecGANDiscriminator()
@@ -223,10 +224,10 @@ def incept(args):
       _G_zs = []
       for i, _G_z in enumerate(_G_z_feats):
         _G_z = feats_denorm(_G_z).astype(np.float64)
-        _audio = r9y9_melspec_to_waveform(_G_z, fs=FS, waveform_len=16384)
+        _audio = r9y9_melspec_to_waveform(_G_z, fs=args.data_sample_rate, waveform_len=16384)
         if i == 0:
           out_fp = os.path.join(incept_dir, '{}.wav'.format(str(_step).zfill(9)))
-          save_as_wav(out_fp, FS, _audio)
+          save_as_wav(out_fp, args.data_sample_rate, _audio)
         _G_zs.append(_audio[:, 0, 0])
 
       _preds = []
@@ -276,8 +277,13 @@ if __name__ == '__main__':
   parser.add_argument('mode', type=str, choices=['train', 'incept'])
   parser.add_argument('train_dir', type=str)
 
-  parser.add_argument('--data_dir', type=str)
-  parser.add_argument('--data_prefetch_gpu_num', type=int)
+  data_args = parser.add_argument_group('Data')
+  data_args.add_argument('--data_cfg', type=str,
+          help='Path to dataset configuration')
+  data_args.add_argument('--data_dir', type=str,
+          help='Data directory containing *only* audio files to load')
+  data_args.add_argument('--data_prefetch_gpu_num', type=int,
+	  help='If nonnegative, prefetch examples to this GPU (Tensorflow device num)')
 
   train_args = parser.add_argument_group('Train')
   train_args.add_argument('--train_ckpt_every_nsecs', type=int)
@@ -296,6 +302,7 @@ if __name__ == '__main__':
   parser.set_defaults(
       mode=None,
       train_dir=None,
+      data_cfg='../../datacfg/sc09.txt',
       data_dir=None,
       data_prefetch_gpu_num=0,
       train_ckpt_every_nsecs=600,
@@ -307,11 +314,22 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
+  with open(args.data_cfg, 'r') as f:
+    for l in f.read().strip().splitlines():
+      k, v = l.split(',')
+      try:
+        v = int(v)
+      except:
+        v = float(v)
+      setattr(args, 'data_' + k, v)
+
   if not os.path.isdir(args.train_dir):
     os.makedirs(args.train_dir)
 
   if args.mode == 'train':
-    fps = glob.glob(os.path.join(args.data_dir, '*.wav'))
+    fps = glob.glob(os.path.join(args.data_dir, '*'))
+    if len(fps) == 0:
+      raise ValueError('Found no audio files in {}'.format(args.data_dir))
     print('Found {} audio files'.format(len(fps)))
     train(fps, args)
   elif args.mode == 'incept':
