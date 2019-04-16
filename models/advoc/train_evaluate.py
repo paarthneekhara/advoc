@@ -20,6 +20,8 @@ def train(fps, args):
     raise NotImplementedError()
 
   model, summary = override_model_attrs(model, args.model_overrides)
+  model.audio_fs = args.data_sample_rate
+
   print('-' * 80)
   print(summary)
   print('-' * 80)
@@ -83,6 +85,8 @@ def eval(fps, args):
     raise NotImplementedError()
 
   model, summary = override_model_attrs(model, args.model_overrides)
+  model.audio_fs = args.data_sample_rate
+
   print('-' * 80)
   print(summary)
   print('-' * 80)
@@ -198,6 +202,8 @@ def infer(fps, args):
     raise NotImplementedError()
 
   model, summary = override_model_attrs(model, args.model_overrides)
+  model.audio_fs = args.data_sample_rate
+  
   print('-' * 80)
   print(summary)
   print('-' * 80)
@@ -337,6 +343,7 @@ if __name__ == '__main__':
   parser.add_argument('--audio_normalize', dest='audio_normalize', action='store_true')
   parser.add_argument('--subseq_randomize_offset', dest='subseq_randomize_offset', action='store_true')
   parser.add_argument('--data_overlap_ratio', type=float)
+  parser.add_argument('--data_sample_rate', type=int)
   parser.add_argument('--model_overrides', type=str)
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
   parser.add_argument('--max_steps', type=int)
@@ -357,6 +364,7 @@ if __name__ == '__main__':
       audio_normalize=False,
       subseq_randomize_offset=False,
       data_overlap_ratio=0.25,
+      data_sample_rate=22050,
       model_overrides=None,
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60,

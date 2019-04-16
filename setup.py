@@ -18,7 +18,8 @@ setup(
       'tensorflow-gpu==1.13.1',
       'librosa==0.6.3',
       'lws==1.2',
-      'scipy==1.2.1',
+      'tqdm>=4.31.1',
+      'scipy>=1.0.0',
     ],
     test_suite='tests'
 )

@@ -115,10 +115,11 @@ The mel-spectrograms can be vocoded either using the pre-trained models provided
 
 ```
 cd scripts
+export CUDA_VISIBLE_DEVICES="0"
 python spectrogram_advoc.py \
 --spec_dir ../models/advoc/data/ljspeech/mel_specs/test \
 --out_dir ../models/advoc/data/ljspeech/vocoded_output/test \
---model_ckpt <PATH TO PRETRAINED CKPT>
+--model_ckpt <PATH TO PRETRAINED CKPT> \
 --meta_fp <PATH TO MODEL METAGRAPH>
 ```
 
