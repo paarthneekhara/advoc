@@ -31,10 +31,10 @@ def train(fps, args):
     x_magspec, x_wav = decode_extract_and_batch(
       fps,
       batch_size=model.train_batch_size,
-      subseq_len=model.subseq_len,
+      slice_len=model.subseq_len,
       audio_fs=model.audio_fs,
       audio_mono=True,
-      audio_normalize=args.audio_normalize,
+      audio_normalize=args.data_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
       extract_type='magspec',
@@ -42,10 +42,11 @@ def train(fps, args):
       repeat=True,
       shuffle=True,
       shuffle_buffer_size=512,
-      subseq_randomize_offset=args.subseq_randomize_offset,
-      subseq_overlap_ratio=args.data_overlap_ratio,
-      subseq_pad_end=True,
-      prefetch_size=64 * 4,
+      slice_first_only=args.data_slice_first_only,
+      slice_randomize_offset=args.data_slice_randomize_offset,
+      slice_overlap_ratio=args.data_slice_overlap_ratio,
+      slice_pad_end=args.data_slice_pad_end,
+      prefetch_size=model.train_batch_size * 8,
       prefetch_gpu_num=0)
 
   # Create model
@@ -95,10 +96,10 @@ def eval(fps, args):
     x_magspec, x_wav = decode_extract_and_batch(
       fps,
       batch_size=model.eval_batch_size,
-      subseq_len=model.subseq_len,
+      slice_len=model.subseq_len,
       audio_fs=model.audio_fs,
       audio_mono=True,
-      audio_normalize=args.audio_normalize,
+      audio_normalize=args.data_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
       extract_type='magspec',
@@ -106,9 +107,10 @@ def eval(fps, args):
       repeat=False,
       shuffle=False,
       shuffle_buffer_size=None,
-      subseq_randomize_offset=False,
-      subseq_overlap_ratio=0.,
-      subseq_pad_end=True,
+      slice_first_only=args.data_slice_first_only,
+      slice_randomize_offset=False,
+      slice_overlap_ratio=0.,
+      slice_pad_end=True,
       prefetch_size=None,
       prefetch_gpu_num=None)
   
@@ -203,7 +205,7 @@ def infer(fps, args):
 
   model, summary = override_model_attrs(model, args.model_overrides)
   model.audio_fs = args.data_sample_rate
-  
+
   print('-' * 80)
   print(summary)
   print('-' * 80)
@@ -212,10 +214,10 @@ def infer(fps, args):
     x_magspec, x_wav = decode_extract_and_batch(
       fps,
       batch_size=args.infer_batch_size,
-      subseq_len= model.subseq_len,
+      slice_len= model.subseq_len,
       audio_fs=model.audio_fs,
       audio_mono=True,
-      audio_normalize=args.audio_normalize,
+      audio_normalize=args.data_normalize,
       decode_fastwav=args.data_fastwav,
       decode_parallel_calls=4,
       extract_type='magspec',
@@ -223,11 +225,11 @@ def infer(fps, args):
       repeat=False,
       shuffle=False,
       shuffle_buffer_size=None,
-      subseq_randomize_offset=False,
-      subseq_overlap_ratio=0.,
-      subseq_pad_end=True,
+      slice_randomize_offset=False,
+      slice_overlap_ratio=0.,
+      slice_pad_end=True,
       prefetch_size=None,
-      prefetch_gpu_num=0)
+      prefetch_gpu_num=None)
 
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
   x_melspec = spectral.mag_to_mel_linear_spec(x_magspec)
@@ -252,9 +254,9 @@ def infer(fps, args):
   step = tf.train.get_or_create_global_step()
   gan_saver = tf.train.Saver(var_list=G_vars + [step], max_to_keep=1)
   
-  input_audio = tf.py_func( spectral.audio_from_magspec, [x_inverted_magspec[0]], tf.float32, stateful=False)
-  target_audio = tf.py_func( spectral.audio_from_magspec, [x_magspec[0]], tf.float32, stateful=False)
-  gen_audio = tf.py_func( spectral.audio_from_magspec, [gen_magspec[0]], tf.float32, stateful=False)
+  input_audio = tf.py_func( spectral.audio_from_mag_spec, [x_inverted_magspec[0]], tf.float32, stateful=False)
+  target_audio = tf.py_func( spectral.audio_from_mag_spec, [x_magspec[0]], tf.float32, stateful=False)
+  gen_audio = tf.py_func( spectral.audio_from_mag_spec, [gen_magspec[0]], tf.float32, stateful=False)
 
   # dont know why i rehspae them this way. just following past convention.
   input_audio = tf.reshape(input_audio, [1, -1, 1, 1] )
@@ -337,13 +339,9 @@ if __name__ == '__main__':
 
   parser.add_argument('mode', type=str, choices=['train', 'eval', 'infer'])
   parser.add_argument('train_dir', type=str)
+  parser.add_argument('--data_cfg', type=str, help='Path to dataset configuration')
   parser.add_argument('--model_type', type=str, choices=['regular', 'small'])
   parser.add_argument('--data_dir', type=str, required=True)
-  parser.add_argument('--data_fastwav', dest='data_fastwav', action='store_true')
-  parser.add_argument('--audio_normalize', dest='audio_normalize', action='store_true')
-  parser.add_argument('--subseq_randomize_offset', dest='subseq_randomize_offset', action='store_true')
-  parser.add_argument('--data_overlap_ratio', type=float)
-  parser.add_argument('--data_sample_rate', type=int)
   parser.add_argument('--model_overrides', type=str)
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
   parser.add_argument('--max_steps', type=int)
@@ -360,11 +358,6 @@ if __name__ == '__main__':
       train_dir=None,
       model_type="regular",
       data_dir=None,
-      data_fastwav=False,
-      audio_normalize=False,
-      subseq_randomize_offset=False,
-      data_overlap_ratio=0.25,
-      data_sample_rate=22050,
       model_overrides=None,
       train_ckpt_every_nsecs=360,
       train_summary_every_nsecs=60,
@@ -378,6 +371,15 @@ if __name__ == '__main__':
       )
 
   args = parser.parse_args()
+
+  with open(args.data_cfg, 'r') as f:
+    for l in f.read().strip().splitlines():
+      k, v = l.split(',')
+      try:
+        v = int(v)
+      except:
+        v = float(v)
+      setattr(args, 'data_' + k, v)
 
   if not os.path.isdir(args.train_dir):
     os.makedirs(args.train_dir)
