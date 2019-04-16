@@ -170,8 +170,7 @@ python generate_spectrogram.py \
   --n 1000 \
 ```
 
-
-TODO
+You can also run on a MelspecGAN you trained by changing `--ckpt_fp`.
 
 ## Dataset configuration
 
