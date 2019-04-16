@@ -47,7 +47,7 @@ def train(fps, args):
       slice_overlap_ratio=args.data_slice_overlap_ratio,
       slice_pad_end=args.data_slice_pad_end,
       prefetch_size=model.train_batch_size * 8,
-      prefetch_gpu_num=args.data_prefetch_gpu_num)
+      prefetch_gpu_num=0)
 
   # Create model
   spectral = SpectralUtil(n_mels = model.n_mels, fs = model.audio_fs)
@@ -254,9 +254,9 @@ def infer(fps, args):
   step = tf.train.get_or_create_global_step()
   gan_saver = tf.train.Saver(var_list=G_vars + [step], max_to_keep=1)
   
-  input_audio = tf.py_func( spectral.audio_from_magspec, [x_inverted_magspec[0]], tf.float32, stateful=False)
-  target_audio = tf.py_func( spectral.audio_from_magspec, [x_magspec[0]], tf.float32, stateful=False)
-  gen_audio = tf.py_func( spectral.audio_from_magspec, [gen_magspec[0]], tf.float32, stateful=False)
+  input_audio = tf.py_func( spectral.audio_from_mag_spec, [x_inverted_magspec[0]], tf.float32, stateful=False)
+  target_audio = tf.py_func( spectral.audio_from_mag_spec, [x_magspec[0]], tf.float32, stateful=False)
+  gen_audio = tf.py_func( spectral.audio_from_mag_spec, [gen_magspec[0]], tf.float32, stateful=False)
 
   # dont know why i rehspae them this way. just following past convention.
   input_audio = tf.reshape(input_audio, [1, -1, 1, 1] )
