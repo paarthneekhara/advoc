@@ -154,8 +154,6 @@ def train(fps, args):
 
 
 def infer(args):
-  OUT_FP = 'infer.meta'
-
   zgen_n = tf.placeholder(tf.int32, [], name='samp_z_n')
   zgen = tf.random.normal([zgen_n, Z_DIM], dtype=tf.float32, name='samp_z')
 
