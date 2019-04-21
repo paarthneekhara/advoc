@@ -61,7 +61,9 @@ def decode_audio(fp, fs=None, mono=False, normalize=False, fastwav=False):
     x = np.mean(x, 2, keepdims=True)
 
   if normalize:
-    x /= np.max(np.abs(x))
+    factor = np.max(np.abs(x))
+    if factor > 0:
+      x /= factor
 
   return fs, x
 
