@@ -1,6 +1,6 @@
 # Adversarial vocoding
 
-Code from our paper *Expediting TTS Synthesis with Adversarial Vocoding*. Sound examples can be found [here](https://chrisdonahue.github.io/advoc_examples).
+Code from our paper [*Expediting TTS Synthesis with Adversarial Vocoding*](https://arxiv.org/abs/1904.07944). Sound examples can be found [here](https://chrisdonahue.github.io/advoc_examples).
 
 [Adversarial vocoding](#adversarial-vocoder-advoc) is a method for transforming perceptually-informed spectrograms (e.g. mel spectrograms) into audio. It can be used in combination with TTS systems which produce spectrograms (e.g. [Tacotron 2](https://github.com/Rayhane-mamah/Tacotron-2)). We also provide a method for [generating spectrograms with a GAN](#mel-spectrogram-gan), which can then be vocoded to audio using adversarial vocoding.
 
