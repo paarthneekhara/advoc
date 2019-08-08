@@ -30,9 +30,9 @@ if __name__ == '__main__':
   parser.add_argument('--model_ckpt', type=str,
       help='Adversarial vocoder checkpoint')
   parser.add_argument('--meta_fp', type=str,
-      help='Met graph filepath')
+      help='Meta graph filepath')
   parser.add_argument('--fs', type=int,
-      help='sampling rate')
+      help='Sample rate')
   parser.add_argument('--subseq_len', type=int,
       help="model subseq length")
 
@@ -42,8 +42,7 @@ if __name__ == '__main__':
       model_ckpt=None,
       meta_fp=None,
       fs=22050,
-      subseq_len=256
-      )
+      subseq_len=256)
 
   args = parser.parse_args()
 

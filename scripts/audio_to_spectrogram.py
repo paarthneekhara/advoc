@@ -16,6 +16,8 @@ if __name__ == '__main__':
       help='Directory of audio files')
   parser.add_argument('--out_dir', type=str, required=True,
       help='Directory for spectrograms')
+  parser.add_argument('--fs', type=int,
+      help='Sample rate')
   parser.add_argument('--data_fast_wav',
       action='store_true', dest='data_fast_wav',
       help='If set, provides faster loading of standard WAV files via scipy')
@@ -23,6 +25,7 @@ if __name__ == '__main__':
   parser.set_defaults(
       wave_dir=None,
       out_dir=None,
+      fs=22050,
       data_fast_wav=False)
 
   args = parser.parse_args()
@@ -38,7 +41,7 @@ if __name__ == '__main__':
 
     _, wave = decode_audio(
         wave_fp,
-        fs=22050,
+        fs=args.fs,
         fastwav=args.data_fast_wav,
         mono=True,
         normalize=True)
