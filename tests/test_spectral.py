@@ -41,9 +41,9 @@ class TestSpectralModule(unittest.TestCase):
 
     X_mag = np.abs(X)
     self.assertEqual(X_mag.dtype, np.float64)
-    self.assertAlmostEqual(np.sum(X_mag), 2148.755, 3, 'invalid spec')
-    self.assertAlmostEqual(np.sum(X_mag[33]), 55.455, 3, 'invalid spec')
-    self.assertAlmostEqual(np.sum(X_mag[40]), 20.347, 3, 'invalid spec')
+    self.assertAlmostEqual(np.sum(X_mag), 2148.69, 2, 'invalid spec')
+    self.assertAlmostEqual(np.sum(X_mag[33]), 55.45, 2, 'invalid spec')
+    self.assertAlmostEqual(np.sum(X_mag[40]), 20.35, 2, 'invalid spec')
 
 
   def test_stft_tf(self):
@@ -70,10 +70,10 @@ class TestSpectralModule(unittest.TestCase):
 
         _X_mag = np.abs(_X)
         self.assertEqual(_X_mag.dtype, np.float32)
-        self.assertAlmostEqual(np.sum(_X_mag[0]), 160.600, 3, 'invalid spec')
-        self.assertAlmostEqual(np.sum(_X_mag[1]), 2148.754, 3, 'invalid spec')
-        self.assertAlmostEqual(np.sum(_X_mag[1, 33]), 55.455, 3, 'invalid spec')
-        self.assertAlmostEqual(np.sum(_X_mag[1, 40]), 20.347, 3, 'invalid spec')
+        self.assertAlmostEqual(np.sum(_X_mag[0]), 160.60, 2, 'invalid spec')
+        self.assertAlmostEqual(np.sum(_X_mag[1]), 2148.69, 2, 'invalid spec')
+        self.assertAlmostEqual(np.sum(_X_mag[1, 33]), 55.45, 2, 'invalid spec')
+        self.assertAlmostEqual(np.sum(_X_mag[1, 40]), 20.35, 2, 'invalid spec')
 
 
   def test_tacotron2(self):
@@ -103,7 +103,7 @@ class TestSpectralModule(unittest.TestCase):
     # Therefore, we should skip comparison of first 3 frames.
     r9y9_melspec = np.swapaxes(r9y9_melspec, 0, 1)[3:, :, np.newaxis]
 
-    self.assertTrue(np.array_equal(melspec, r9y9_melspec), 'not equal r9y9')
+    self.assertAlmostEqual(np.sum(melspec), np.sum(r9y9_melspec), 8, 'not equal r9y9')
 
 
   def test_r9y9_tf(self):
